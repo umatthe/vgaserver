@@ -1,0 +1,17 @@
+rm *.btl
+clean.mup
+
+setenv ATWCPU T425
+setenv SLOT1CPU T800
+
+setenv APFELCPU $SLOT1CPU
+setenv VGACPU $ATWCPU
+
+oc farn.occ /$APFELCPU
+ilink farn.tco snglmath.lib /$APFELCPU /f occam8.lnk
+
+oc vga.occ /$VGACPU
+ilink vga.tco hostio.lib convert.lib /$VGACPU /f occama.lnk
+
+occonf farn.pgm
+icollect farn.cfb

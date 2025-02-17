@@ -1,0 +1,4 @@
+#####################################
+
+$ISERVER -se -sr -ss -sc $PWD\$1.btl
+resetatw

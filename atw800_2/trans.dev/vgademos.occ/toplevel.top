@@ -1,0 +1,84 @@
+
+{{{F README.TXT
+:::F README.TXT
+}}}
+
+--
+-- VGA Lib AT800/2
+--
+{{{F VGA.INC
+:::F VGA.INC
+}}}
+{{{F VGATOOLS.INC
+:::F VGATOOLS.INC
+}}}
+{{{F VGA.OCC
+:::F VGA.OCC
+}}}
+--
+-- Apfelmaennchen
+--
+{{{F MAKE.MUP
+:::F MAKE.MUP
+}}}
+{{{F MAKE_A.MUP
+:::F MAKE_A.MUP
+}}}
+{{{F APFEL.OCC
+:::F APFEL.OCC
+}}}
+{{{F APFEL.PGM
+:::F APFEL.PGM
+}}}
+{{{F APFEL_A.PGM
+:::F APFEL_A.PGM
+}}}
+--
+-- Farnblatt
+--
+{{{F MAKEF.MUP
+:::F MAKEF.MUP
+}}}
+{{{F MAKEF_A.MUP
+:::F MAKEF_A.MUP
+}}}
+{{{F FARN.OCC
+:::F FARN.OCC
+}}}
+{{{F FARN.PGM
+:::F FARN.PGM
+}}}
+{{{F FARN_A.PGM
+:::F FARN_A.PGM
+}}}
+--
+-- 3D-Demo
+--
+{{{F MAKE3.MUP
+:::F MAKE3.MUP
+}}}
+{{{F MAKE3_A.MUP
+:::F MAKE3_A.MUP
+}}}
+{{{F 3D.OCC
+:::F 3D.OCC
+}}}
+{{{F 3D.PGM
+:::F 3D.PGM
+}}}
+{{{F 3D_A.PGM
+:::F 3D_A.PGM
+}}}
+--
+-- Pacman (currently no Userinterface on ATW800/2)
+--
+{{{F MAKEP_A.MUP
+:::F MAKEP_A.MUP
+}}}
+{{{F PACMAN.OCC
+:::F PACMAN.OCC
+}}}
+{{{F PACMAN_A.PGM
+:::F PACMAN_A.PGM
+}}}
+

@@ -1,0 +1,33 @@
+#INCLUDE "hostio.inc"
+
+PROC hellogra (CHAN OF SP fs,ts)
+
+  #USE "hostio.lib"
+
+  --
+  -- Screenmode 1024x768x256 Colors
+  -- ATW800/2 Screen at #80600000
+  --
+  [1024*768]BYTE screen :
+  PLACE screen AT #600000/4 :
+
+  SEQ
+    SEQ r = 0 FOR 3
+      SEQ
+        --
+        -- Invert screen pixel by pixel
+        --
+        SEQ i = 0 FOR (1024*768)
+          SEQ
+            screen[i] := BYTE ((INT screen[i])><#FF)
+
+        --
+        -- Invert screen 4 pixel at a time
+        --
+        []INT screen32 RETYPES screen :
+        SEQ i = 0 FOR (1024*768)/4
+          SEQ
+            screen32[i] := screen32[i]><#FFFFFFFF
+
+    so.exit(fs,ts,sps.success)
+:

@@ -1,0 +1,6 @@
+echo "Compile: "$1.c
+icc $1.c /t425
+echo "Link: "$1.tco
+ilink $1.tco /t425 /f startup.lnk
+echo "Collect: "$1.lku
+icollect $1.lku /t /o $1.btl

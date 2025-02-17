@@ -1,0 +1,21 @@
+CPU_OPTS=/T5 
+
+rm *.btl
+rm *.tco
+rm *.lku
+rm *.cfb
+rm *.plc
+
+echo "Compile:"
+icc  /FS $CPU_OPTS main
+icc  /FS $CPU_OPTS gamedef
+icc  /FS $CPU_OPTS gamepic
+icc  /FS $CPU_OPTS sokoban
+
+echo "Link:"
+ilink main.tco gamedef.tco gamepic.tco sokoban.tco $CPU_OPTS /f startup.lnk  
+
+echo "Collect:"
+icollect  main.lku /t /o soku.btl /p soku.plc
+
+ls -l *.btl

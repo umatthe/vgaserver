@@ -1,0 +1,31 @@
+icollect : INMOS toolset collector
+Toolset Version 2.0.26 
+
+Memory map for processor 0 T425
+Load Start is 80000150,  HALT ON ERROR
+  LOW priority process 'Init.system'
+    Code from 'sysproc.lib', file offset 5935
+                                             #8000A51C  #8000A73C       544
+      Entry address                          #8000A51E 
+    Workspace                                #8000A48C  #8000A4FC       112
+
+  LOW priority process 'System.process.a'
+    Code from 'sysproc.lib', file offset 16624
+                                             #8000A970  #8000B2BC      2380
+      Entry address                          #8000A972 
+    Workspace                                #8000A73C  #8000A954       536
+    Vectorspace                              #8000B2BC  #8000B33C       512
+
+  HIGH priority process 'System.process.b'
+    Code from 'sysproc.lib', file offset 29144
+                                             #80000184  #800001E0        92
+      Entry address                          #80000185 
+    Workspace                                #80000150  #80000168        24
+
+  LOW priority USER process
+    Code from 'main.lku', file offset 2
+                                             #80000280  #8000A2CC     41036
+      Entry address                          #80005201 
+    Workspace                                #80000150  #80000264       276
+
+Parameter data                               #8000A2CC  #8000A48C       448

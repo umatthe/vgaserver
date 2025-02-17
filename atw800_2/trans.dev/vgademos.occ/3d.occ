@@ -1,0 +1,176 @@
+PROC DEMO3D(CHAN OF ANY Aus, Ein)
+
+  #INCLUDE "vga.inc"
+  #INCLUDE "rot.occ"
+  #USE "snglmath.lib"
+  #INCLUDE "mathvals.inc"
+
+  --{{{  Global VGA Server Variables
+  INT MAXX,MAXY,MAXCOL,VGAMOD,SEITEN :
+  
+  --}}}
+  --{{{  Global 3d-Demo Variables
+  VAL MAXECKEN IS 1000:
+  VAL MAXELE   IS  50:
+  VAL MAXPUNKT IS   6:   -- fuer Rotationsfigur
+  VAL COLOR IS 1 :
+  INT ECKEN,ELE :
+  [MAXECKEN][4]REAL32 p :
+  [MAXECKEN]INT xfeld,yfeld,xafeld,yafeld,xbfeld,ybfeld :
+  [MAXELE]INT elelang :
+  [MAXPUNKT][2]REAL32 linie :
+  [4][4]REAL32 mat :
+  INT k,x,y,c :
+  REAL32 winkel,w :
+  BOOL fl :
+  INT irq :
+  INT c,xm,ym,r:
+  --}}}
+
+  SEQ
+    --{{{  Graphik - initialisieren
+    
+    Aus ! INIT;VGAMOD;VORDEF
+    Ein ? MAXX;MAXY;MAXCOL;SEITEN
+    Aus ! SAVE
+    
+    --Aus ! CLS;SETLINMASK;#AAFF0011
+    --Aus ! CLS;SETLINMASK;#F0F0F0F0
+    
+    --Aus ! SETLINMODE;DECKEND
+    --Aus ! SETLINBREIT;7
+    --{{{  Zuordnung Palette -- DAC
+    --
+    -- Zuordnug Palette - DAC
+    --
+    SEQ i=0 FOR 16
+      SEQ
+        Aus ! PALDAC;i;i
+    --}}}
+    
+    --}}}
+
+    --{{{  Das Hauptprogramm
+    
+    --{{{  Beide Graphikseiten loeschen
+    Aus ! LOGPAGE;0;CLS
+    Aus ! LOGPAGE;1;CLS
+    Aus ! PHYSPAGE;0
+    --}}}
+    --{{{  Clip-test
+    Aus ! LOGPAGE;0;PLINE;5;15;49;49;MAXX-49;49;MAXX-49;MAXY-49;49;MAXY-49;49;49
+    Aus ! LOGPAGE;1;PLINE;5;15;49;49;MAXX-49;49;MAXX-49;MAXY-49;49;MAXY-49;49;49
+    Aus ! SETCLIPWIN;50;50;MAXX-50;MAXY-50
+    --}}}
+    --{{{  3-d Drehung
+    --{{{  Rotationsfigur initialisieren
+    linie[0][0]:=1.0(REAL32)
+    linie[0][1]:=0.0(REAL32)
+    
+    linie[1][0]:=0.8(REAL32)
+    linie[1][1]:=0.3(REAL32)
+    
+    linie[2][0]:=0.1(REAL32)
+    linie[2][1]:=0.4(REAL32)
+    
+    linie[3][0]:=0.1(REAL32)
+    linie[3][1]:=0.9(REAL32)
+    
+    linie[4][0]:=1.0(REAL32)
+    linie[4][1]:=1.0(REAL32)
+    
+    linie[5][0]:=0.1(REAL32)
+    linie[5][1]:=1.0(REAL32)
+    machfigur (linie,6,10,p,elelang,ECKEN,ELE)
+    --}}}
+    --{{{  Variablen initialisieren
+    fl := FALSE
+    SEQ i=0 FOR ECKEN
+      SEQ
+        xafeld[i]:=0
+        yafeld[i]:=0
+        xbfeld[i]:=0
+        ybfeld[i]:=0
+    --}}}
+    SEQ l=0 FOR 2
+      --WHILE TRUE
+      SEQ
+        winkel:=0.0(REAL32)
+        WHILE (winkel < 360.0(REAL32))
+          SEQ
+            initm  (mat)
+            transl (mat,0.0(REAL32),-0.5(REAL32),0.0(REAL32))
+            --transl (mat,-2.5(REAL32),-1.0(REAL32),-0.7(REAL32))
+            rotx   (mat,winkel)
+            roty   (mat,winkel)
+            rotz   (mat,winkel)
+            transf (mat,600.0(REAL32))
+            transl (mat,1.5(REAL32),1.0(REAL32),0.7(REAL32))
+            skal   (mat,160.0(REAL32),160.0(REAL32),160.0(REAL32))
+            --transl (mat,2.5(REAL32),1.0(REAL32),0.7(REAL32))
+            -- Aus ! CLSWIN
+            --{{{  Loeschen mit Line Befehl
+            k:=0
+            SEQ j=0 FOR ELE
+              SEQ
+                --Aus ! PLINE;elelang[j];COLOR REM MAXCOL
+                Aus ! PLINE;elelang[j];0
+                SEQ i=0 FOR elelang[j]
+                  SEQ
+                    Aus ! xbfeld[k];ybfeld[k]
+                    k:=k+1
+            
+            --}}}
+            --{{{  Figur ausgeben
+            SEQ i=0 FOR ECKEN
+              SEQ
+                machpunkt(p[i],mat,xfeld[i],yfeld[i])
+            
+            k:=0
+            SEQ j=0 FOR ELE
+              SEQ
+                Aus ! PLINE;elelang[j];COLOR REM MAXCOL
+                SEQ i=0 FOR elelang[j]
+                  SEQ
+                    Aus ! xfeld[k];yfeld[k]
+                    --{{{  Feld merken (zum Bildloeschen mit Line)
+                    xbfeld[k]:=xafeld[k]
+                    ybfeld[k]:=yafeld[k]
+                    xafeld[k]:=xfeld[k]
+                    yafeld[k]:=yfeld[k]
+                    --}}}
+                    k:=k+1
+            --}}}
+            --{{{  Bildschirm schalten
+            IF
+              fl
+                SEQ
+                  Aus ! SEITENEU
+                  Ein ? irq
+                  Aus ! PHYSPAGE;0;LOGPAGE;1
+              TRUE
+                SEQ
+                  Aus ! SEITENEU
+                  Ein ? irq
+                  Aus ! PHYSPAGE;1;LOGPAGE;0
+            fl := NOT fl
+            --}}}
+    
+            winkel := winkel + 3.0(REAL32)
+    --}}}
+    
+    --}}}
+
+    --{{{  Ende
+    BYTE key :
+    SEQ
+      Aus ! GETKEY
+      Ein ? key
+      Aus ! RESTORE
+      Aus ! LOGPAGE;0
+      Aus ! PHYSPAGE;0
+      --Aus ! DACROT
+      Aus ! EXIT
+    --}}}
+:
+

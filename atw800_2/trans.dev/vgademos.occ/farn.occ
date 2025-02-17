@@ -1,0 +1,204 @@
+#INCLUDE "VGA.INC"
+
+PROC FARN(CHAN OF ANY Aus, Ein)
+
+
+  --{{{  Konstante
+  VAL O.0         IS      0.0(REAL32):
+  VAL O.5         IS      0.5(REAL32):
+  VAL O.0625      IS   0.0625(REAL32):
+  VAL MO.75       IS    -0.75(REAL32):
+  VAL O1.0        IS      1.0(REAL32):
+  VAL O4.0        IS      4.0(REAL32):
+  VAL O5.0        IS      5.0(REAL32):
+  VAL O16.0       IS     16.0(REAL32):
+  VAL O1000000.0  IS  1000000.0(REAL32):
+  
+  VAL ax IS [[ 0.00(REAL32), 0.20(REAL32),-0.15(REAL32), 0.85(REAL32)],
+             [ 0.00(REAL32),-0.26(REAL32), 0.28(REAL32), 0.04(REAL32)],
+             [ 0.00(REAL32), 0.00(REAL32), 0.00(REAL32), 0.00(REAL32)]] :
+  
+  VAL ay IS [[ 0.00(REAL32), 0.23(REAL32), 0.26(REAL32),-0.04(REAL32)],
+             [ 0.16(REAL32), 0.22(REAL32), 0.24(REAL32), 0.85(REAL32)],
+             [ 0.00(REAL32), 1.60(REAL32), 0.44(REAL32), 1.60(REAL32)]] :
+  
+  VAL p IS [0.01(REAL32),0.07(REAL32),0.07(REAL32),0.85(REAL32)] :
+  
+  --}}}
+  --{{{  Physikalische Werte
+  INT MAXX,MAXY,MAXCOL,VGAMOD,SEITEN :
+  
+  --VAL VGAMOD IS 1:
+  
+  --}}}
+  --{{{  Default Werte fuer die Grenzen
+  --
+  -- Default-Werte
+  --
+  VAL xmin IS -8.0(REAL32) :
+  VAL xmax IS 10.0(REAL32) :
+  VAL ymin IS -5.0(REAL32) :
+  VAL ymax IS 15.0(REAL32) :
+  VAL xmf  IS 77.0(REAL32) :
+  VAL ymf  IS 48.0(REAL32) :
+  --}}}
+  --{{{  Variablen
+  REAL32 x,y,xn,yn,z,s :
+  INT xs,ys,k :
+  
+  --}}}
+
+  SEQ
+
+    VGAMOD := 1
+    --{{{  Test-Graphiken erzeugen
+    --
+    -- Spielerei auf Graphikschirm
+    --
+    
+    Aus ! INIT;VGAMOD;VORDEF
+    Ein ? MAXX;MAXY;MAXCOL;SEITEN
+    Aus ! PHYSPAGE;1;LOGPAGE;1
+    
+    Aus ! CLS
+    --{{{  Farbboxen erzeugen
+    INT maxcol :
+    SEQ
+      IF
+        MAXCOL > MAXX
+          maxcol := MAXX / 10
+        TRUE
+          maxcol := MAXCOL
+      SEQ i=0 FOR (maxcol-1)
+        SEQ
+          Aus ! BOX;i*(MAXX/maxcol);0;(i+1)*(MAXX/maxcol);MAXY-1;i
+    --}}}
+    Aus ! CLS
+ 
+    --}}}
+    --{{{  COMMENT Clip-test
+    --:::A  0 0
+    --{{{  Clip-test
+    --Aus ! PLINE;5;15;49;49;MAXX-49;49;MAXX-49;MAXY-49;49;MAXY-49;49;49
+    --Aus ! SETCLIPWIN;50;50;MAXX-50;MAXY-50
+    --}}}
+    --}}}
+    --{{{  Palette aendern
+    --
+    -- Farbpalette aendern
+    --
+    INT r,g,b :
+    INT sr,sg,sb :
+    SEQ
+      sr := 1
+      sg := 0
+      sb := 0
+      r  := 0
+      g  := 0
+      b  := 0
+      SEQ i=0 FOR 256
+        SEQ
+          r := (r PLUS sr)
+          g := (g PLUS sg)
+          b := (b PLUS sb)
+          --{{{  Rot aendern
+          IF
+            r>63
+              SEQ
+                sr := 0
+                r  := 63
+                sg := 1
+            TRUE
+              SKIP
+          IF
+            r<0
+              sr := 1
+            TRUE
+              SKIP
+          --}}}
+          --{{{  Gruen aendern
+          IF
+            g>63
+              SEQ
+                sg := 0
+                g  := 63
+                sb := 1
+            TRUE
+              SKIP
+          IF
+            g<0
+              sg := 1
+            TRUE
+              SKIP
+          --}}}
+          --{{{  Blau aendern
+          IF
+            b>63
+              SEQ
+                sb := 0
+                b  := 63
+                sr := -1
+            TRUE
+              SKIP
+          IF
+            b<0
+              sb := 1
+            TRUE
+              SKIP
+          --}}}
+          --Aus ! SETPAL;i;r;g;b
+    --}}}
+    --{{{  Die Berechnung des Bildes
+    ---
+    --- Farn berechnen
+    ---
+    #USE "snglmath.lib"
+    INT32 seed :
+    SEQ
+      x:=0.0(REAL32)
+      y:=0.0(REAL32)
+      z,seed := RAN(8(INT32))
+      SEQ i=1 FOR 100000
+        SEQ
+          z,seed := RAN(seed)
+          k := 0
+          s := p[0]
+          WHILE s<z
+            SEQ
+              k := k PLUS 1
+              s := s + p[k]
+          xn :=((ax[0][k]*x) + (ax[1][k]*y)) +ax[2][k]
+          yn :=((ay[0][k]*x) + (ay[1][k]*y)) +ay[2][k]
+          x:=xn
+          y:=yn
+          xs:=INT ROUND ((x-xmin)*xmf)
+          ys:=INT ROUND ((ymax-y)*ymf)
+          Aus ! POINT;xs-340;ys;2
+          --Aus ! POINT;xs-340;ys-240;2
+          --Aus ! POINT;xs-340;ys-240;(i REM 255)
+    
+    --}}}
+    Aus ! INV;INV;INV;INV
+    --{{{  COMMENT Getpoint-Test
+    --:::A  0 0
+    --{{{  Getpoint-Test
+    --INT c:
+    --SEQ yk=0 FOR MAXY
+    --  SEQ
+    --    SEQ xk=0 FOR MAXX
+    --      SEQ
+    --        Aus ! GETPOINT;xk;yk
+    --        Ein ? c
+    --        Aus ! POINT;xk;yk;~c
+    --}}}
+    --}}}
+    --{{{  Ende
+    BYTE key :
+    SEQ
+      Aus ! GETKEY
+      Ein ? key    
+      Aus ! PHYSPAGE;0;LOGPAGE;0
+      Aus ! EXIT
+    --}}}
+:
+

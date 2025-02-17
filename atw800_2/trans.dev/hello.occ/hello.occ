@@ -1,0 +1,19 @@
+#INCLUDE "hostio.inc"
+
+PROC hello (CHAN OF SP fs,ts)
+  #USE "hostio.lib"
+  #USE "convert.lib"
+
+  INT len :
+  [10]BYTE buffer :
+
+  SEQ
+    so.write.string.nl(fs,ts,"Hallo! Dies ist ein Test.")
+    SEQ i=0 FOR 32
+      SEQ
+        so.write.string(fs,ts,"i = ")
+        HEXTOSTRING(len,buffer,i)
+        buffer[len]:=BYTE(0)
+        so.write.string.nl(fs,ts,buffer)  
+    so.exit(fs,ts,sps.success)
+:

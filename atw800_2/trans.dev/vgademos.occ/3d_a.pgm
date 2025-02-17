@@ -1,0 +1,28 @@
+--
+-- ATW800/2-Graphic-Transputer connected directly
+--
+NODE atw :
+--NODE slot1 :
+ARC hostarc :
+NETWORK
+  DO
+    SET atw(type,memsize := "T425", 2048 * 1024)
+    -- SET slot1(type,memsize := "T800", 2048 * 1024)
+    CONNECT atw[link][0] TO HOST WITH hostarc
+    -- CONNECT atw[link][1] TO slot1[link][3]
+:
+
+#INCLUDE "hostio.inc"
+#USE "3D.lku"
+#USE "VGA.lku"
+
+CONFIG
+  CHAN OF SP fs,ts :
+  CHAN OF ANY in,out :
+  PLACE fs,ts ON hostarc :
+  PAR
+    PROCESSOR atw
+      DEMO3D(out,in)
+    PROCESSOR atw
+      VGA(fs,ts,in,out)
+:

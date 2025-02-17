@@ -1,0 +1,49 @@
+Software Development in Occan using the Inmos Toolset
+-----------------------------------------------------
+
+- The Inmos Toolset is located below ATW_800\D72UNI.
+  Wrapper to start the tools are loacted in ATW_800\MUPTOOLS. 
+  For details how to use the toolset please read documentation 
+  available online.
+
+- Upon mupfel startup autmatically the needed environmet to
+  call the tools is configured.
+  You may test it be just typing "oc" at the mupfel prompt.
+  This invokes the Occam compiler without any parameter and
+  will output a usage page of the Compiler.
+
+- Example:
+  Goto VGADEMOS.OCC
+  The Apfelmaennchen-Demo consists mainly of the following files:
+  APFEL.OCC: The Occam Source of the Programm
+  APFEL.PGM: The Occam Code that places the Procedures on the Tranputer(s)
+  VGA*.*:    Those files are common files needed for the other Demos too.
+             This is a server coded in Occam that handles the HW-Access
+             to the ATW800/2. 
+  MAKE.MUP:  The Makefile that calls all tools to create the executable
+             named APFEL.BTL
+
+  To run the executable on the transputer(s) make sure that
+  the ATW is set to 1024x768x256 and type:
+  
+  irun APFEL
+
+- Inside VGADEMOS.OCC are several small demo programs all with a Makefile:
+  MAKE.MUP:  Creates Apfelmaennchen on a ATW800/2 with additional T800 in Slot 1
+  MAKEF.MUP: Creates a fern leaf on a ATW800/2 with additional T800 in Slot 1
+  MAKE3.MUP: Createa a 3D-Demo on a ATW800/2 with additional T800 in Slot 1
+
+  MAKE_A.MUP: Creates Apfelmaennchen for a ATW800/2 standalone
+  MAKE_F.MUP: Creates a fern leaf on a ATW800/2 standalone
+  MAKE3.MUP:  Createa a 3D-Demo on a ATW800/2 standalone  
+
+Text editors:
+-------------
+
+  me.ttp: MicroEmacs type me APFEL.OCC to open the soure file.
+
+  origami: to invoke origami drop the file you want to use on the
+           ORIGAMI.PRG in the VGADEMOS.OCC directory.
+           If you want the real TDS3 feeling drop the file
+           TOPLEVEL.TOP on ORIGAMI.PRG. Further detail on
+           Origami and how folding editors work are available online.

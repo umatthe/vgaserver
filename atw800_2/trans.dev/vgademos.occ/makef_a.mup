@@ -1,0 +1,20 @@
+rm *.btl
+rm *.tco
+rm *.clu
+rm *.cfb
+rm *.lku
+
+setenv ATWCPU T425
+setenv SLOT1CPU T800
+
+setenv APFELCPU $ATWCPU
+setenv VGACPU $ATWCPU
+
+oc farn.occ /$APFELCPU
+ilink farn.tco snglmath.lib /$APFELCPU /f occama.lnk
+
+oc vga.occ /$VGACPU
+ilink vga.tco hostio.lib convert.lib /$VGACPU /f occama.lnk
+
+occonf farn_a.pgm
+icollect farn_a.cfb

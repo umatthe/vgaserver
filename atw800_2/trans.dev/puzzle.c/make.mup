@@ -1,0 +1,6 @@
+rm *.btl
+rm *.tco
+rm *.cfb
+rm *.lku
+
+cbuild puzzle

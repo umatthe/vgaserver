@@ -1,0 +1,213 @@
+--{{{  Unterprogramme
+#INCLUDE "mathvals.inc"
+#USE "snglmath.lib"
+
+--{{{  PROC warte     (VAL INT dauer)
+--
+-- Verzoegerung
+--
+PROC warte(VAL INT dauer)
+  TIMER uhr :
+  INT jetzt :
+  SEQ
+    uhr ? jetzt
+    uhr ? AFTER jetzt PLUS dauer
+:
+--}}}
+--{{{  PROC initm ( [4][4]REAL32 c )
+PROC initm([4][4]REAL32 c)
+  SEQ
+    c:=[[1.0(REAL32),0.0(REAL32),0.0(REAL32),0.0(REAL32)],
+        [0.0(REAL32),1.0(REAL32),0.0(REAL32),0.0(REAL32)],
+        [0.0(REAL32),0.0(REAL32),1.0(REAL32),0.0(REAL32)],
+        [0.0(REAL32),0.0(REAL32),0.0(REAL32),1.0(REAL32)]]
+:
+--}}}
+--{{{  PROC matmult ( [4][4]REAL32 a , VAL [4][4]REAL32 b )
+PROC matmult ([4][4]REAL32 a,VAL [4][4]REAL32 b)
+  [4][4]REAL32 c :
+  SEQ
+    SEQ y=0 FOR 4
+      SEQ
+        c[0][y]:=((a[0][y]*b[0][0])+(a[1][y]*b[0][1]))+((a[2][y]*b[0][2])+
+                 (a[3][y]*b[0][3]))
+
+        c[1][y]:=((a[0][y]*b[1][0])+(a[1][y]*b[1][1]))+((a[2][y]*b[1][2])+
+                 (a[3][y]*b[1][3]))
+
+        c[2][y]:=((a[0][y]*b[2][0])+(a[1][y]*b[2][1]))+((a[2][y]*b[2][2])+
+                 (a[3][y]*b[2][3]))
+
+        c[3][y]:=((a[0][y]*b[3][0])+(a[1][y]*b[3][1]))+((a[2][y]*b[3][2])+
+                 (a[3][y]*b[3][3]))
+
+    [16]INT erg RETYPES a :
+    [16]INT org RETYPES c :
+    erg := org
+:
+--}}}
+--{{{  PROC skal ( [4][4]REAL32 c , VAL REAL32 sx , sy , sz )
+PROC skal ([4][4]REAL32 c,VAL REAL32 sx,sy,sz)
+
+  [4][4]REAL32 e,t :
+
+  SEQ
+    t:=[[1.0(REAL32),0.0(REAL32),0.0(REAL32),0.0(REAL32)],
+        [0.0(REAL32),sx         ,0.0(REAL32),0.0(REAL32)],
+        [0.0(REAL32),0.0(REAL32),sy         ,0.0(REAL32)],
+        [0.0(REAL32),0.0(REAL32),0.0(REAL32),sz         ]]
+
+    matmult(c,t)
+:
+--}}}
+--{{{  PROC rotx ( [4][4]REAL32 c , VAL REAL32 w )
+PROC rotx ([4][4]REAL32 c,VAL REAL32 w)
+
+  [4][4]REAL32 e,t :
+  REAL32 si,co,wi :
+
+  SEQ
+    wi := (w*PI)/180.0(REAL32)
+    si := SIN(wi)
+    co := COS(wi)
+
+    t:=[[1.0(REAL32),0.0(REAL32),0.0(REAL32),0.0(REAL32)],
+        [0.0(REAL32),1.0(REAL32),0.0(REAL32),0.0(REAL32)],
+        [0.0(REAL32),0.0(REAL32),co         ,-si        ],
+        [0.0(REAL32),0.0(REAL32),si         ,co         ]]
+
+
+    matmult(c,t)
+:
+--}}}
+--{{{  PROC roty ( [4][4]REAL32 c , VAL REAL32 w )
+PROC roty ([4][4]REAL32 c,VAL REAL32 w)
+
+  [4][4]REAL32 e,t :
+  REAL32 si,co,wi :
+
+  SEQ
+    wi := (w*PI)/180.0(REAL32)
+    si := SIN(wi)
+    co := COS(wi)
+
+    t:=[[1.0(REAL32),0.0(REAL32),0.0(REAL32),0.0(REAL32)],
+        [0.0(REAL32),co         ,0.0(REAL32),si         ],
+        [0.0(REAL32),0.0(REAL32),1.0(REAL32),0.0(REAL32)],
+        [0.0(REAL32),-si        ,0.0(REAL32),co         ]]
+
+    matmult(c,t)
+:
+--}}}
+--{{{  PROC rotz ( [4][4]REAL32 c , VAL REAL32 w )
+PROC rotz ([4][4]REAL32 c,VAL REAL32 w)
+
+  [4][4]REAL32 e,t :
+  REAL32 si,co,wi :
+
+  SEQ
+    wi := (w*PI)/180.0(REAL32)
+    si := SIN(wi)
+    co := COS(wi)
+
+    t:=[[1.0(REAL32),0.0(REAL32),0.0(REAL32),0.0(REAL32)],
+        [0.0(REAL32),co         ,-si        ,0.0(REAL32)],
+        [0.0(REAL32),si         ,co         ,0.0(REAL32)],
+        [0.0(REAL32),0.0(REAL32),0.0(REAL32),1.0(REAL32)]]
+
+    matmult(c,t)
+:
+--}}}
+--{{{  PROC transl ( [4][4]REAL32 c , VAL REAL32 tx , ty , tz )
+PROC transl ([4][4]REAL32 c,VAL REAL32 tx,ty,tz)
+
+  [4][4]REAL32 e,t :
+
+  SEQ
+
+    t:=[[1.0(REAL32),0.0(REAL32),0.0(REAL32),0.0(REAL32)],
+        [tx         ,1.0(REAL32),0.0(REAL32),0.0(REAL32)],
+        [ty         ,0.0(REAL32),1.0(REAL32),0.0(REAL32)],
+        [tz         ,0.0(REAL32),0.0(REAL32),1.0(REAL32)]]
+
+    matmult(c,t)
+:
+--}}}
+--{{{  PROC transf ( [4][4]REAL32 c , VAL REAL32 zp )
+PROC transf ([4][4]REAL32 c,VAL REAL32 zp)
+
+  [4][4]REAL32 e,t :
+
+  SEQ
+
+    t:=[[1.0(REAL32),0.0(REAL32),0.0(REAL32),(-1.0(REAL32))/zp],
+        [0.0(REAL32),1.0(REAL32),0.0(REAL32),0.0(REAL32)      ],
+        [0.0(REAL32),0.0(REAL32),1.0(REAL32),0.0(REAL32)      ],
+        [0.0(REAL32),0.0(REAL32),0.0(REAL32),1.0(REAL32)      ]]
+
+    matmult(c,t)
+:
+--}}}
+--{{{  PROC machpunkt ( VAL [4]REAL32 a,VAL [4][4]REAL32 b, INT x,y )
+PROC machpunkt (VAL [4]REAL32 a, VAL [4][4]REAL32 b,INT x,y)
+  REAL32 c :
+  SEQ
+    c:=((a[0]*b[0][0])+(a[1]*b[0][1]))+((a[2]*b[0][2])+(a[3]*b[0][3]))
+    x:=INT ROUND((((a[0]*b[1][0])+(a[1]*b[1][1]))+
+                 ((a[2]*b[1][2])+(a[3]*b[1][3])))/c)
+    y:=INT ROUND((((a[0]*b[2][0])+(a[1]*b[2][1]))+
+                 ((a[2]*b[2][2])+(a[3]*b[2][3])))/c)
+:
+--}}}
+
+--{{{  PROC machfigur ( VAL [][4]REAL32 linie, VAL INT punkte, [][]REAL32....)
+PROC machfigur(VAL [][2]REAL32 linie,VAL INT punkte,VAL INT teilung,
+               [][]REAL32 feld,[]INT laengen,INT ecken,elemente)
+
+  --{{{  Konstante und Variablen
+  VAL PI2     IS 2.0(REAL32)*PI :
+  VAL SCHRITT IS PI2 / (REAL32 ROUND teilung)  :
+  REAL32 w,si,co:
+  INT j,k,kk:
+  --}}}
+  SEQ
+    --{{{  Variablen initialisieren
+    w:=0.0(REAL32)
+    j:=0
+    k:=0
+    --}}}
+    WHILE w< PI2
+      SEQ
+        si := SIN(w)
+        co := COS(w)
+        SEQ i=0 FOR punkte
+          SEQ
+            feld[k][0] :=1.0(REAL32)
+            feld[k][1] :=linie[i][0]*si
+            feld[k][2] :=linie[i][1]
+            feld[k][3] :=linie[i][0]*co
+            k:=k+1
+        laengen[j] := punkte
+        w:=w+SCHRITT
+        j:=j+1
+    --{{{  Querverbindungen
+    SEQ i=0 FOR punkte
+      SEQ
+        SEQ ii=0 FOR teilung+1
+          SEQ
+            kk:=((ii REM teilung)*punkte)+i
+            feld[k][0]:=feld[kk][0]
+            feld[k][1]:=feld[kk][1]
+            feld[k][2]:=feld[kk][2]
+            feld[k][3]:=feld[kk][3]
+            k:=k+1
+        laengen[j]:=teilung+1
+        j:=j+1
+    --}}}
+
+    ecken    := k
+    elemente := j
+:
+--}}}
+
+--}}}

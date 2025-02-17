@@ -1,0 +1,8 @@
+echo "Compile: "$1.occ
+oc $1.occ /t425
+echo "Link: "$1.tco
+ilink $1.tco hostio.lib convert.lib /t425 /f occama.lnk
+echo "Configure: "$1.pgm
+occonf $1.pgm
+echo "Collect: "$1.cfb
+icollect $1.cfb

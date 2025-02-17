@@ -1,0 +1,265 @@
+#INCLUDE "VGA.INC"
+
+
+PROC APFEL.MAENNCHEN(CHAN OF ANY Aus,Ein)
+  --{{{  Usefull Constants
+  
+  VAL O.0         IS      0.0(REAL32):
+  VAL O.5         IS      0.5(REAL32):
+  VAL O.0625      IS   0.0625(REAL32):
+  VAL MO.75       IS    -0.75(REAL32):
+  VAL O1.0        IS      1.0(REAL32):
+  VAL O4.0        IS      4.0(REAL32):
+  VAL O5.0        IS      5.0(REAL32):
+  VAL O16.0       IS     16.0(REAL32):
+  VAL O1000000.0  IS  1000000.0(REAL32):
+  --}}}
+
+  --{{{  Default Grenzen
+  --
+  -- Default-Apfelmaennchen Grenzen
+  --
+  VAL DRLR         IS       -2.1(REAL32):
+  VAL DRRR         IS        1.0(REAL32):
+  VAL DIOR         IS        1.0(REAL32):
+  VAL DIUR         IS       -1.0(REAL32):
+  VAL DMAXITER     IS       256:
+  
+  VAL MAXXmax IS 1280 :
+  --}}}
+
+  --{{{  Variablen
+  INT MAXX,MAXY,MAXCOL,VGAMOD,SEITEN :
+  
+  REAL32 RLR, RRR, IOR, IUR:
+  INT   MAXITER:
+  
+  [MAXXmax]INT V1,V2:
+  
+  INT HALBE,HALBE1 :
+  
+  REAL32 flx,fly,yc:
+  INT yy:
+  
+  --}}}
+
+  #INCLUDE "VGATOOLS.INC"
+
+  --{{{  Iterate
+  
+  PROC ITERATE(VAL REAL32 xc,yc, INT k)
+    REAL32 x,x2,y,y2:
+    SEQ
+      x:=O.0
+      x2:=O.0
+      y:=O.0
+      y2:=O.0
+      k:=0
+      WHILE (((x2+y2) <= O4.0) AND (k < MAXITER))
+        SEQ
+          y:=x*y
+          y:=(y+y)+yc
+          x:=(x2-y2)+xc
+          x2:=x*x
+          y2:=y*y
+          k:=k+1
+  :
+  --}}}
+  --{{{  Erzeugen
+  
+  PROC ERZEUGEN(VAL REAL32 fl,yc, []INT Vektor)
+    REAL32 xc:
+    VAL Bits IS [$80,$40,$20,$10,$08,$04,$02,$01]:
+    SEQ
+      SEQ i=0 FOR MAXX
+        Vektor[i]:=0
+      xc:=RLR
+      SEQ ix=0 FOR MAXX
+        INT k:
+        REAL32 x1,y2:
+        SEQ
+          y2:=yc*yc
+          x1:=xc+O1.0
+          IF
+            (xc > MO.75)
+              REAL32 r,s:
+              SEQ
+                r:=(xc*xc)+y2
+                s:=SQRT((r-(O.5*xc))+O.0625)
+                IF
+                  ((O16.0*(r*s)) > (((O5.0*s) - (O4.0*xc)) + O1.0))
+                    ITERATE(xc,yc,k)
+                  TRUE
+                    k:=MAXITER
+            TRUE
+              IF
+                (((x1*x1)+y2) > O.0625)
+                  ITERATE(xc,yc,k)
+                TRUE
+                  k:=MAXITER
+  
+          IF
+            MAXCOL > 256
+              Vektor[ix] := ((1000+(k>>2)) REM MAXCOL)
+            TRUE
+              Vektor[ix] := (k REM MAXCOL)
+          xc:=xc+fl
+  :
+  --}}}
+
+  --{{{  Senden
+  PROC SENDEN(CHAN OF ANY Aus, VAL []INT V, VAL INT y)
+    INT i,s,e:
+    SEQ
+      i:=0
+      s:=0
+      e:=0
+      WHILE i<(MAXX-1)
+        SEQ
+          IF
+            V[i] = V[i+1]
+              e:=e+1
+            TRUE
+              SEQ
+                IF
+                  e = s
+                    Aus ! POINT;i;y;V[i]
+                  TRUE
+                    Aus ! HLINE;s;e;y;V[i]
+  
+                s:=e+1
+                e:=s
+          i:=i+1
+  
+      IF
+        e = s
+          Aus ! POINT;i;y;V[i]
+        TRUE
+          Aus ! HLINE;s;e;y;V[i]
+  :
+  --}}}
+  --{{{  Apfelloop
+  
+  PROC APFELLOOP(CHAN OF ANY Ein,Aus)
+    SEQ
+      ---
+      --- Apfelmaennchen berechnen
+      ---
+      yc:=IOR
+      yy:=0
+      flx:=(RRR-RLR)/(REAL32 TRUNC (MAXX-1))
+      fly:=(IOR-IUR)/(REAL32 TRUNC (MAXY-1))
+      ERZEUGEN(flx,yc,V1)
+      SEQ iy=0 FOR HALBE1
+        SEQ
+          yc:=yc-fly
+          PRI PAR
+            SEQ
+              SENDEN(Aus,V1,yy)
+              yy :=yy + 1
+            ERZEUGEN(flx,yc,V2)
+          IF
+            (iy < HALBE)
+              SEQ
+                yc:=yc-fly
+                PRI PAR
+                  SEQ
+                    SENDEN(Aus,V2,yy)
+                    yy :=yy + 1
+                  ERZEUGEN(flx,yc,V1)
+            TRUE
+              SKIP
+      SENDEN(Aus,V2,yy)
+  
+  :
+  --}}}
+  --{{{  Startup
+  
+  PROC startup(CHAN OF ANY Ein,Aus)
+    SEQ
+      --
+      -- Hauptprogramm
+      --
+  
+      VAL [3]BYTE home IS [27(BYTE),'H',0(BYTE)] :
+      SEQ
+        --
+        -- Spielerei auf Graphikschirm
+        --
+  
+        Aus ! INIT;VGAMOD;VORDEF
+        Ein ? MAXX;MAXY;MAXCOL;SEITEN
+        Aus ! LOGPAGE;1;PHYSPAGE;1
+  
+        HALBE   := (MAXY-1)/2
+        HALBE1  := HALBE+1
+  
+        Aus ! CLS
+  
+        SEQ i=0 FOR MAXX
+          Aus ! LINE;MAXX/2;0;i;MAXY-1;(i REM MAXCOL)
+        --Aus ! CLS
+  
+        RLR     := DRLR
+        RRR     := DRRR
+        IOR     := DIOR
+        IUR     := DIUR
+        MAXITER := DMAXITER
+  :
+  --}}}
+
+  --{{{  Main
+
+  #USE "convert.lib"
+  REAL32 fdur :
+  [80]BYTE buffer :
+  INT len :
+  INT value,ver,vaddr:
+  INT irq :
+  BYTE key :
+  SEQ
+    Aus ! TSTART
+    startup(Ein,Aus)
+    Aus ! TSTOP
+    Ein ? fdur
+    sendstring(Aus, "Duration : *#00")
+    REAL32TOSTRING(len,buffer,fdur,0,0)
+    buffer[len]:=#00(BYTE)
+    sendstring(Aus,[buffer FROM 0 FOR (len+1)])
+    sendstring(Aus," sec*C*N*#00")
+
+    SEQ rn=0 FOR 1
+      SEQ
+        SEQ i=0 FOR 1
+          INT irq :
+          SEQ
+            Aus ! SEITENEU
+            Ein ? irq
+            --Aus ! SETVTGREG;12;(i TIMES 2048)
+            --Aus ! SETVTGREG;13;#000C
+        SEQ i=0 FOR 64
+          INT irq :
+          SEQ
+            Aus ! SEITENEU
+            Ein ? irq
+            --Aus ! SETVTGREG;12;((64-i) TIMES 2048)
+            --Aus ! SETVTGREG;13;#000C
+
+    Aus ! TSTART
+    APFELLOOP(Ein,Aus)
+    Aus ! TSTOP
+    Ein ? fdur
+    Aus ! RAWTEXT
+    sendstring(Aus, "Duration APFELLOOP: *#00")
+    REAL32TOSTRING(len,buffer,fdur,0,0)
+    buffer[len]:=#00(BYTE)
+    sendstring(Aus,[buffer FROM 0 FOR (len+1)])
+    sendstring(Aus," sec*C*N*#00")
+
+    Aus!INV;INV;INV;INV;INV;INV
+    Aus!GETKEY
+    Ein?key
+    Aus!PHYSPAGE;0;LOGPAGE;0
+    Aus!EXIT
+  --}}}
+:

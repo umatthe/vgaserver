@@ -1,0 +1,11 @@
+rm *.btl
+clean.mup
+
+setenv ATWCPU T425
+setenv SLOT1CPU T800
+
+oc pacman.occ /$ATWCPU
+ilink pacman.tco convert.lib hostio.lib /$ATWCPU /f occama.lnk
+
+occonf pacman_a.pgm
+icollect pacman_a.cfb

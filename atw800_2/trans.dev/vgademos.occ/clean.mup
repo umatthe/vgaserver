@@ -1,0 +1,4 @@
+rm *.tco
+rm *.clu
+rm *.cfb
+rm *.lku

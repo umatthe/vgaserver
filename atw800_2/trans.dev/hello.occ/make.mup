@@ -1,0 +1,7 @@
+rm *.btl
+rm *.tco
+rm *.clu
+rm *.cfb
+rm *.lku
+
+occbuild hello

@@ -1,0 +1,20 @@
+--
+-- Transputer connected directly
+--
+NODE p :
+ARC hostarc :
+NETWORK
+  DO
+    SET p(type,memsize := "T425", 2048 * 1024)
+    CONNECT p[link][0] TO HOST WITH hostarc
+:
+
+#INCLUDE "hostio.inc"
+#USE "hello.lku"
+
+CONFIG
+  CHAN OF SP fs,ts :
+  PLACE fs,ts ON hostarc :
+  PROCESSOR p
+    hello(fs,ts)
+:

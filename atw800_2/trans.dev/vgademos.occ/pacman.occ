@@ -1,0 +1,1506 @@
+#INCLUDE "hostio.inc"
+#USE "convert.lib"
+VAL SCREENBASE IS #600000/4 :
+
+PROC TEST.START(CHAN OF SP fs,ts)
+  --{{{  globale Variablen und Konstante
+  --VAL S IS 0:
+  --VAL BREIT IS 320 :
+  --VAL AKTANZ IS 320 TIMES 200 :
+  VAL BREIT IS 1024 :
+  VAL HOCH IS 768 :
+  VAL AKTANZ IS BREIT TIMES HOCH :
+  [BREIT]BYTE zeile:
+  INT myx,myy,myd,myverz,myanz :
+  INT myx.alt,myy.alt :
+  BOOL LEVELENDE,ENDE,mybew,knubberbar,gnot,mnot,snot :
+
+  [4]INT gx,gy,gwart,gx.alt,gy.alt,gverz,gdir,gwirr :
+  [4]BOOL gbew :
+
+  INT wartlevel,verzlevel,myverzlevel,myanzlevel,gwirrlevel,knubberlevel :
+  INT wartlowlevel :
+
+  INT knubber,wartanz :
+
+  INT hiscore,score,punktanz :
+  --}}}
+  --{{{  VGA-Register
+  VAL ANZ   IS 2048*1024:
+  --INT MISCREG,FEATREG,SUBREG :
+  --INT CRTWAHL,CRTREG :
+  --INT SEQWAHL,SEQREG :
+  --INT GRWAHL,GRREG :
+  --INT DACWAHLw,DACWAHLr,DACREG,DACMASK :
+  --INT ATTRI :
+  --INT MISCREGr :
+  --INT MODUS,ENABLE :
+  --INT MODECRTL,HERCOMP :
+  [ANZ]BYTE MEM:
+
+  --INT SEGSELREG :    -- ET 4000
+
+  INT GAMEPORT :
+  --}}}
+  --{{{  Platzierung der VGA-Register im Transputeradressraum
+  --
+  -- Basis I/O - Bereich : #1000000
+  -- Basis Mem - Bereich : #0800000
+  -- PC-Adressen muessen mit 4 multipliziert (wegen 32 Bit-CPU)
+  -- zur jeweiligen Basis addiert werden
+  -- anschliessend muss das Ergebnis durch 4 geteilt werden (wegen OCCAM)
+  --
+
+  PLACE MEM      AT SCREENBASE:
+  --PLACE MEM      AT (#0A80000/4):
+  --PLACE MISCREG  AT (#1000F08/4):
+  --PLACE FEATREG  AT (#1000F68/4):
+  --PLACE SUBREG   AT (#1000F0C/4):
+  --PLACE CRTWAHL  AT (#1000F50/4):
+  --PLACE CRTREG   AT (#1000F54/4):
+  --PLACE SEQWAHL  AT (#1000F10/4):
+  --PLACE SEQREG   AT (#1000F14/4):
+  --PLACE GRWAHL   AT (#1000F38/4):
+  --PLACE GRREG    AT (#1000F3C/4):
+  --PLACE DACMASK  AT (#1000F18/4):
+  --PLACE DACWAHLw AT (#1000F20/4):
+  --PLACE DACWAHLr AT (#1000F1C/4):
+  --PLACE DACREG   AT (#1000F24/4):
+  --PLACE ATTRI    AT (#1000F00/4):
+  --PLACE MODUS    AT (#1011BA0/4):
+  --PLACE ENABLE   AT (#1000408/4):
+  --PLACE MODECRTL AT (#1000F60/4):
+  --PLACE HERCOMP  AT (#1000EFC/4):
+
+  --PLACE MISCREGr AT (#1000F30/4):
+
+  --PLACE SEGSELREG AT (#1000F34/4):
+
+  --UMA PLACE GAMEPORT AT (#1000800/4):
+  --}}}
+  --{{{  Feldtypen festlegen
+  VAL LINKS    IS #01 :
+  VAL RECHTS   IS #02 :
+  VAL OBEN     IS #04 :
+  VAL UNTEN    IS #08 :
+  VAL RICHTUNG IS #0F :
+  
+  VAL MAUER  IS #00 :
+  VAL FETT   IS #10 :
+  VAL PUNKT  IS #20 :
+  VAL LEER   IS #30 :
+  
+  --{{{  Mauern
+  VAL M      IS MAUER :
+  VAL MU     IS MAUER \/ UNTEN :
+  VAL MUO    IS (MAUER \/ UNTEN) \/ OBEN :
+  VAL MUR    IS (MAUER \/ UNTEN) \/ RECHTS :
+  VAL MUL    IS (MAUER \/ UNTEN) \/ LINKS :
+  VAL MURL   IS ((MAUER \/ UNTEN) \/ RECHTS) \/ LINKS :
+  VAL MUOR   IS ((MAUER \/ UNTEN) \/ OBEN) \/ RECHTS :
+  VAL MUOL   IS ((MAUER \/ UNTEN) \/ OBEN) \/ LINKS :
+  VAL MUORL  IS (((MAUER \/ UNTEN) \/ OBEN) \/ RECHTS) \/ LINKS :
+  VAL MO     IS MAUER \/ OBEN :
+  VAL MOR    IS (MAUER \/ OBEN) \/ RECHTS :
+  VAL MOL    IS (MAUER \/ OBEN) \/ LINKS :
+  VAL MORL   IS ((MAUER \/ OBEN) \/ RECHTS) \/ LINKS :
+  VAL MR     IS MAUER \/ RECHTS :
+  VAL MRL    IS (MAUER \/ RECHTS) \/ LINKS :
+  VAL ML     IS MAUER \/ LINKS :
+  VAL H      IS LEER :
+  --}}}
+  --{{{  Punkte
+  VAL PU     IS PUNKT \/ UNTEN :
+  VAL PUO    IS (PUNKT \/ UNTEN) \/ OBEN :
+  VAL PUR    IS (PUNKT \/ UNTEN) \/ RECHTS :
+  VAL PUL    IS (PUNKT \/ UNTEN) \/ LINKS :
+  VAL PURL   IS ((PUNKT \/ UNTEN) \/ RECHTS) \/ LINKS :
+  VAL PUOR   IS ((PUNKT \/ UNTEN) \/ OBEN) \/ RECHTS :
+  VAL PUOL   IS ((PUNKT \/ UNTEN) \/ OBEN) \/ LINKS :
+  VAL PUORL  IS (((PUNKT \/ UNTEN) \/ OBEN) \/ RECHTS) \/ LINKS :
+  VAL PO     IS PUNKT \/ OBEN :
+  VAL POR    IS (PUNKT \/ OBEN) \/ RECHTS :
+  VAL POL    IS (PUNKT \/ OBEN) \/ LINKS :
+  VAL PORL   IS ((PUNKT \/ OBEN) \/ RECHTS) \/ LINKS :
+  VAL PR     IS PUNKT \/ RECHTS :
+  VAL PRL    IS (PUNKT \/ RECHTS) \/ LINKS :
+  VAL PL     IS PUNKT \/ LINKS :
+  --}}}
+  --{{{  Fette Punkte
+  VAL FPU     IS FETT \/ UNTEN :
+  VAL FPUO    IS (FETT \/ UNTEN) \/ OBEN :
+  VAL FPUR    IS (FETT \/ UNTEN) \/ RECHTS :
+  VAL FPUL    IS (FETT \/ UNTEN) \/ LINKS :
+  VAL FPURL   IS ((FETT \/ UNTEN) \/ RECHTS) \/ LINKS :
+  VAL FPUOR   IS ((FETT \/ UNTEN) \/ OBEN) \/ RECHTS :
+  VAL FPUOL   IS ((FETT \/ UNTEN) \/ OBEN) \/ LINKS :
+  VAL FPUORL  IS (((FETT \/ UNTEN) \/ OBEN) \/ RECHTS) \/ LINKS :
+  VAL FPO     IS FETT \/ OBEN :
+  VAL FPOR    IS (FETT \/ OBEN) \/ RECHTS :
+  VAL FPOL    IS (FETT \/ OBEN) \/ LINKS :
+  VAL FPORL   IS ((FETT \/ OBEN) \/ RECHTS) \/ LINKS :
+  VAL FPR     IS FETT \/ RECHTS :
+  VAL FPRL    IS (FETT \/ RECHTS) \/ LINKS :
+  VAL FPL     IS FETT \/ LINKS :
+  --}}}
+  
+  --{{{  Bildschirm  Maske
+  VAL BILD IS
+  [[MUR,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MURL,MRL,MRL,MRL,MRL,MRL,
+    MRL,MRL,MRL,MRL,MRL,MRL,MUL],
+   [MUO,PUR,PRL,PRL,PURL,PRL,PRL,PRL,PRL,PRL,PRL,PUL,MUO,PUR,PRL,PRL,PRL,PRL,
+    PRL,PURL,PRL,PRL,PRL,PUL,MUO],
+   [MUO,PUO,MR,ML,PUO,MR,MRL,MRL,MRL,MRL,ML,PUO,MUO,PUO,MR,MRL,MRL,MRL,
+    ML,PUO,MR,MRL,MUL,PUO,MUO],
+   [MUO,POR,PRL,PRL,PORL,PRL,PURL,PRL,PRL,PRL,PRL,PUOL,MUO,PUOR,PRL,PURL,PURL,PRL,
+    PRL,PORL,PRL,PUL,MUO,PUO,MUO],
+   [MUOR,MRL,MRL,MRL,MRL,ML,PUO,MUR,MURL,MURL,MUL,PUO,MUO,PUO,MU,POR,PUOL,MR,
+    MRL,MRL,MUL,PUO,MUO,PUO,MUO],
+   [MUO,FPUR,PRL,PRL,PRL,PURL,PUOL,MOR,MORL,MORL,MOL,PUO,MUO,PUO,MOR,ML,PUOR,PRL,
+    PRL,PUL,MUO,PUO,MUO,FPUO,MUO],
+   [MUO,PUO,MR,MURL,MUL,PUOR,PORL,PURL,PRL,PRL,PRL,POL,MUO,POR,PRL,PRL,PUOL,MUR,
+    MUL,PUO,MUO,PUO,MUO,PUO,MUO],
+   [MUO,POR,PUL,MUOR,MUOL,PUO,M,PUO,MR,MRL,MRL,MRL,MORL,MRL,MRL,ML,PUO,MUOR,
+    MUOL,PUO,MO,PUO,MO,PUO,MUO],
+   [MUOR,MUL,PUO,MUOR,MUOL,PUOR,PRL,PORL,PRL,PRL,PRL,PRL,PRL,PRL,PRL,PRL,PUOL,
+    MUOR, MUOL,POR,PRL,PUORL,PRL,PUOL,MUO],
+   [MUOR,MOL,PUO,MUOR,MUOL,PUO,MUR,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MUL,PUO,MUOR,
+    MUORL,MURL,MUL,PUO,MU,PUO,MUO],
+   [MUO,PUR,POL,MUOR,MUOL,PUO,MUO,H,H,H,H,H,H,H,H,MUO,PUO,MUOR,
+    MUORL,MUORL,MUOL,PUO,MUO,PUO,MUO],
+   [MUO,PUO,MUR,MORL,MOL,PUO,MUO,H,H,H,H,H,H,H,H,MUO,PUO,MUOR,
+    MUORL,MUORL,MOL,PUO,MUO,PUO,MUO],
+   [MUO,PUO,MUO,PUR,PRL,PUOL,MOR,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MOL,PUO,MOR,
+    MORL,MOL,PUR,POL,MUO,PUO,MUO],
+   [MUO,PUO,MO,PUO,MU,PUOR,PRL,PRL,PRL,PRL,PRL,PRL,PRL,PRL,PRL,PRL,PORL,PRL,
+    PURL,PRL,PUOL,MR,MOL,PUO,MUO],
+   [MUO,POR,PRL,PUOL,MUO,PUO,MR,MRL,MRL,MRL,MRL,MRL,MURL,MRL,MRL,MRL,MRL,ML,
+    PUO,MU,POR,PRL,PRL,PUOL,MUO],
+   [MUOR,MRL,ML,PUO,MO,PUOR,PRL,PRL,PRL,PRL,PRL,PUL,MUO,PUR,PRL,PRL,PRL,PRL,
+    PUOL,MOR,MRL,MRL,ML,FPUO,MUO],
+   [MUO,FPUR,PRL,PORL,PRL,POL,MUR,MURL,MURL,MURL,MUL,PUO,MUO,PUO,MUR,MURL,MURL,
+    MUL, POR,PRL,PRL,PRL,PRL,PUOL,MUO],
+   [MUO,PUO,MR,MRL,MRL,MRL,MORL,MORL,MORL,MORL,MOL,PUO,MO,PUO,MOR,MORL,MORL,MORL,
+    MRL,MRL,MRL,MRL,ML,PUO,MUO],
+   [MUO,POR,PRL,PRL,PRL,PRL,PRL,PRL,PRL,PRL,PRL,PORL,PRL,PORL,PRL,PRL,PRL,PRL,
+    PRL,PRL,PRL,PRL,PRL,POL,MUO],
+   [MOR,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,MRL,
+    MRL,MRL,MRL,MRL,MRL,MRL,MOL]]:
+  --}}}
+  
+  --{{{  Symbole (Mauern, Punkte, u.s.w)
+  VAL GPUNKT IS [[0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [0,0,1,1,1,1,1,1,0,0],
+                 [0,0,1,1,1,1,1,1,0,0],
+                 [0,0,1,1,1,1,1,1,0,0],
+                 [0,0,1,1,1,1,1,1,0,0],
+                 [0,0,1,1,1,1,1,1,0,0],
+                 [0,0,1,1,1,1,1,1,0,0],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0]]:
+  
+  VAL KPUNKT IS [[0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,1,1,0,0,0,0],
+                 [0,0,0,1,1,1,1,0,0,0],
+                 [0,0,0,1,1,1,1,0,0,0],
+                 [0,0,0,0,1,1,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0]]:
+  
+  VAL GEIST IS [[0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,1,1,1,1,0,0,0],
+                [0,0,1,1,1,1,1,1,0,0],
+                [0,0,0,1,1,1,0,1,0,0],
+                [0,1,0,0,1,1,0,0,1,0],
+                [0,1,0,1,1,1,0,1,1,0],
+                [0,1,1,1,1,1,1,1,1,0],
+                [0,1,1,1,1,1,1,1,1,0],
+                [0,1,1,1,1,1,1,1,1,0],
+                [0,0,1,0,1,0,1,0,1,0]]:
+  
+  --{{{  Mampfer
+  --{{{  M0
+  VAL M0 IS [[0,0,0,0,0,0,0,0,0,0],
+             [0,0,0,1,1,1,1,0,0,0],
+             [0,0,1,1,1,1,1,1,0,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,1,1,1,1,1,1,0,0],
+             [0,0,0,1,1,1,1,0,0,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  M1
+  VAL M1 IS [[0,0,0,0,0,0,0,0,0,0],
+             [0,0,0,1,1,1,1,0,0,0],
+             [0,0,1,1,1,1,1,0,0,0],
+             [0,1,1,1,1,1,0,0,0,0],
+             [0,1,1,1,1,0,0,0,0,0],
+             [0,1,1,1,1,0,0,0,0,0],
+             [0,1,1,1,1,1,0,0,0,0],
+             [0,0,1,1,1,1,1,0,0,0],
+             [0,0,0,1,1,1,1,0,0,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  M2
+  VAL M2 IS [[0,0,0,0,0,0,0,0,0,0],
+             [0,0,0,0,0,0,0,0,0,0],
+             [0,0,0,0,0,0,0,0,0,0],
+             [0,1,1,0,0,0,0,1,1,0],
+             [0,1,1,1,0,0,1,1,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,1,1,1,1,1,1,0,0],
+             [0,0,0,1,1,1,1,0,0,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  M3
+  VAL M3 IS [[0,0,0,0,0,0,0,0,0,0],
+             [0,0,0,1,1,1,1,0,0,0],
+             [0,0,0,1,1,1,1,1,0,0],
+             [0,0,0,0,1,1,1,1,1,0],
+             [0,0,0,0,0,1,1,1,1,0],
+             [0,0,0,0,0,1,1,1,1,0],
+             [0,0,0,0,1,1,1,1,1,0],
+             [0,0,0,1,1,1,1,1,0,0],
+             [0,0,0,1,1,1,1,0,0,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  M4
+  VAL M4 IS [[0,0,0,0,0,0,0,0,0,0],
+             [0,0,0,1,1,1,1,0,0,0],
+             [0,0,1,1,1,1,1,1,0,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,1,1,1,0,0,1,1,1,0],
+             [0,1,1,0,0,0,0,1,1,0],
+             [0,0,0,0,0,0,0,0,0,0],
+             [0,0,0,0,0,0,0,0,0,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --}}}
+  
+  --{{{  Mauern
+  --{{{  M
+  VAL SM IS [[0,0,0,0,0,0,0,0,0,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  MU
+  VAL SMU IS [[0,0,0,0,0,0,0,0,0,0],
+              [0,1,1,1,1,1,1,1,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0]]:
+  --}}}
+  --{{{  MUO
+  VAL SMUO IS [[0,1,0,0,0,0,0,0,1,0],
+               [0,1,0,0,0,0,0,0,1,0],
+               [0,1,0,0,0,0,0,0,1,0],
+               [0,1,0,0,0,0,0,0,1,0],
+               [0,1,0,0,0,0,0,0,1,0],
+               [0,1,0,0,0,0,0,0,1,0],
+               [0,1,0,0,0,0,0,0,1,0],
+               [0,1,0,0,0,0,0,0,1,0],
+               [0,1,0,0,0,0,0,0,1,0],
+               [0,1,0,0,0,0,0,0,1,0]]:
+  --}}}
+  --{{{  MUR
+  VAL SMUR IS [[0,0,0,0,0,0,0,0,0,0],
+               [0,1,1,1,1,1,1,1,1,1],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,0,0,0,0,0,0,1,1],
+               [0,1,0,0,0,0,0,0,1,0]]:
+  --}}}
+  --{{{  MUL
+  VAL SMUL IS [[0,0,0,0,0,0,0,0,0,0],
+               [1,1,1,1,1,1,1,1,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [1,1,0,0,0,0,0,0,1,0],
+               [0,1,0,0,0,0,0,0,1,0]]:
+  --}}}
+  --{{{  MURL
+  VAL SMURL IS [[0,0,0,0,0,0,0,0,0,0],
+                [1,1,1,1,1,1,1,1,1,1],
+                [0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0],
+                [1,1,0,0,0,0,0,0,1,1],
+                [0,1,0,0,0,0,0,0,1,0]]:
+  --}}}
+  --{{{  MUOR
+  VAL SMUOR IS [[0,1,0,0,0,0,0,0,1,0],
+                [0,1,0,0,0,0,0,0,1,1],
+                [0,1,0,0,0,0,0,0,0,0],
+                [0,1,0,0,0,0,0,0,0,0],
+                [0,1,0,0,0,0,0,0,0,0],
+                [0,1,0,0,0,0,0,0,0,0],
+                [0,1,0,0,0,0,0,0,0,0],
+                [0,1,0,0,0,0,0,0,0,0],
+                [0,1,0,0,0,0,0,0,1,1],
+                [0,1,0,0,0,0,0,0,1,0]]:
+  --}}}
+  --{{{  MUOL
+  VAL SMUOL IS [[0,1,0,0,0,0,0,0,1,0],
+                [1,1,0,0,0,0,0,0,1,0],
+                [0,0,0,0,0,0,0,0,1,0],
+                [0,0,0,0,0,0,0,0,1,0],
+                [0,0,0,0,0,0,0,0,1,0],
+                [0,0,0,0,0,0,0,0,1,0],
+                [0,0,0,0,0,0,0,0,1,0],
+                [0,0,0,0,0,0,0,0,1,0],
+                [1,1,0,0,0,0,0,0,1,0],
+                [0,1,0,0,0,0,0,0,1,0]]:
+  --}}}
+  --{{{  MUORL
+  VAL SMUORL IS [[0,1,0,0,0,0,0,0,1,0],
+                 [1,1,0,0,0,0,0,0,1,1],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [0,0,0,0,0,0,0,0,0,0],
+                 [1,1,0,0,0,0,0,0,1,1],
+                 [0,1,0,0,0,0,0,0,1,0]]:
+  --}}}
+  --{{{  MO
+  VAL SMO IS [[0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,0,0,0,0,0,0,1,0],
+              [0,1,1,1,1,1,1,1,1,0],
+              [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  MOR
+  VAL SMOR IS [[0,1,0,0,0,0,0,0,1,0],
+               [0,1,0,0,0,0,0,0,1,1],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,0,0,0,0,0,0,0,0],
+               [0,1,1,1,1,1,1,1,1,1],
+               [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  MOL
+  VAL SMOL IS [[0,1,0,0,0,0,0,0,1,0],
+               [1,1,0,0,0,0,0,0,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [0,0,0,0,0,0,0,0,1,0],
+               [1,1,1,1,1,1,1,1,1,0],
+               [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  MORL
+  VAL SMORL IS [[0,1,0,0,0,0,0,0,1,0],
+                [1,1,0,0,0,0,0,0,1,1],
+                [0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0],
+                [0,0,0,0,0,0,0,0,0,0],
+                [1,1,1,1,1,1,1,1,1,1],
+                [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  MR
+  VAL SMR IS [[0,0,0,0,0,0,0,0,0,0],
+              [0,1,1,1,1,1,1,1,1,1],
+              [0,1,0,0,0,0,0,0,0,0],
+              [0,1,0,0,0,0,0,0,0,0],
+              [0,1,0,0,0,0,0,0,0,0],
+              [0,1,0,0,0,0,0,0,0,0],
+              [0,1,0,0,0,0,0,0,0,0],
+              [0,1,0,0,0,0,0,0,0,0],
+              [0,1,1,1,1,1,1,1,1,1],
+              [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  MRL
+  VAL SMRL IS [[0,0,0,0,0,0,0,0,0,0],
+               [1,1,1,1,1,1,1,1,1,1],
+               [0,0,0,0,0,0,0,0,0,0],
+               [0,0,0,0,0,0,0,0,0,0],
+               [0,0,0,0,0,0,0,0,0,0],
+               [0,0,0,0,0,0,0,0,0,0],
+               [0,0,0,0,0,0,0,0,0,0],
+               [0,0,0,0,0,0,0,0,0,0],
+               [1,1,1,1,1,1,1,1,1,1],
+               [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  ML
+  VAL SML IS [[0,0,0,0,0,0,0,0,0,0],
+              [1,1,1,1,1,1,1,1,1,0],
+              [0,0,0,0,0,0,0,0,1,0],
+              [0,0,0,0,0,0,0,0,1,0],
+              [0,0,0,0,0,0,0,0,1,0],
+              [0,0,0,0,0,0,0,0,1,0],
+              [0,0,0,0,0,0,0,0,1,0],
+              [0,0,0,0,0,0,0,0,1,0],
+              [1,1,1,1,1,1,1,1,1,0],
+              [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --}}}
+  
+  --{{{  Ziffern
+  --{{{  0
+  VAL Z0 IS [[0,1,1,1,1,1,1,1,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  1
+  VAL Z1 IS [[0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  2
+  VAL Z2 IS [[0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,1,0,0,0,0,0,0,0,0],
+             [0,1,0,0,0,0,0,0,0,0],
+             [0,1,0,0,0,0,0,0,0,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  3
+  VAL Z3 IS [[0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  4
+  VAL Z4 IS [[0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  5
+  VAL Z5 IS [[0,1,1,1,1,1,1,1,1,0],
+             [0,1,0,0,0,0,0,0,0,0],
+             [0,1,0,0,0,0,0,0,0,0],
+             [0,1,0,0,0,0,0,0,0,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  6
+  VAL Z6 IS [[0,1,1,1,1,1,1,1,0,0],
+             [0,1,0,0,0,0,0,0,0,0],
+             [0,1,0,0,0,0,0,0,0,0],
+             [0,1,0,0,0,0,0,0,0,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  7
+  VAL Z7 IS [[0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  8
+  VAL Z8 IS [[0,1,1,1,1,1,1,1,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  --{{{  9
+  VAL Z9 IS [[0,1,1,1,1,1,1,1,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,0,0,0,0,0,0,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,0,0,0,0,0,0,0,1,0],
+             [0,1,1,1,1,1,1,1,1,0],
+             [0,0,0,0,0,0,0,0,0,0]]:
+  --}}}
+  
+  VAL ZIFFER IS [ Z0,Z1,Z2,Z3,Z4,Z5,Z6,Z7,Z8,Z9 ] :
+  --}}}
+  
+  --}}}
+  
+  --}}}
+
+  --{{{  PROC warte       (VAL INT dauer)
+  --
+  -- Verzoegerung
+  --
+  PROC warte(VAL INT dauer)
+    TIMER uhr :
+    INT jetzt :
+    SEQ
+      uhr ? jetzt
+      uhr ? AFTER jetzt PLUS dauer
+  :
+  --}}}
+  --{{{  INT FUNCTION joystick ()
+  INT FUNCTION joystick()
+    INT dir :
+    --{{{  REGISTER + PLATZIERUNG
+    --
+    -- Basis I/O - Bereich : #1000000
+    -- Basis Mem - Bereich : #0800000
+    -- Basis Latches       : #1800000 (optional Zusatz I/O Ports)
+    -- PC-Adressen muessen mit 4 multipliziert (wegen 32 Bit-CPU)
+    -- zur jeweiligen Basis addiert werden
+    -- anschliessend muss das Ergebnis durch 4 geteilt werden (wegen OCCAM)
+    --
+    INT DRUCKSTATUS :
+    
+    --{{{  Drucker Port Basis #378  (meist Multi-I/O)
+    --UMA PLACE DRUCKSTATUS AT (#1000DE4/4):
+    --}}}
+    --{{{  COMMENT Drucker Port Basis #3BC  (auf Herculeskarte)
+    --:::A  0 0
+    --{{{  Drucker Port Basis #3BC  (auf Herculeskarte)
+    --PLACE DRUCKSTATUS AT (#1000EF4/4):
+    --}}}
+    --}}}
+    --}}}
+    VALOF
+      SEQ
+        CASE (DRUCKSTATUS \/ #08)/\#FF
+          111
+            dir := 3
+          63
+            dir := 1
+          255
+            dir := 4
+          95
+            dir := 2
+          ELSE
+            dir := 0
+        IF
+          (DRUCKSTATUS /\ #08) = 0
+            SEQ
+              dir := -dir
+              IF
+                dir = 0
+                  dir := -5
+                TRUE
+                  SKIP
+          TRUE
+            SKIP
+  
+      RESULT dir
+  :
+  --}}}
+
+  --{{{  PROC cls         ()
+  --
+  -- VGA-Graphikschirm loeschen
+  --
+  PROC cls()
+
+    SEQ
+      --{{{  zeile loeschen
+      INT dest,transfer :
+      SEQ
+        transfer := 1
+        dest := transfer
+        zeile[0] := 0(BYTE)
+        WHILE dest < BREIT
+          SEQ
+            [zeile FROM dest FOR transfer] := [zeile FROM 0 FOR transfer]
+            dest := dest + transfer
+            transfer := transfer + transfer
+      --}}}
+      --MEMlok  IS [MEM FROM BREIT TIMES S FOR AKTANZ] :
+      MEMlok  IS [MEM FROM 0 FOR AKTANZ] :
+      SEQ i=0 FOR HOCH
+        [MEMlok FROM i TIMES BREIT FOR BREIT] := [zeile FROM 0 FOR BREIT]
+
+  :
+  --}}}
+  --{{{  PROC inv        ()
+  --
+  -- VGA-Graphikschirm invertieren
+  --
+  PROC inv()
+  
+    SEQ
+  
+      VAL anz IS AKTANZ >> 2 :
+      --VAL start IS 320 TIMES S :
+      VAL start IS 0 :
+      MEMlok  IS [MEM FROM start FOR anz] :
+      MEMlokA IS [MEM FROM (start + anz) FOR anz] :
+      MEMlokB IS [MEM FROM (start + (2 TIMES anz)) FOR anz] :
+      MEMlokC IS [MEM FROM (start + (3 TIMES anz)) FOR anz] :
+      SEQ i=0 FOR AKTANZ >> 3
+        VAL ii IS i << 1:
+        MEMlok1 IS MEMlok  [ii] :
+        MEMlok2 IS MEMlokA [ii] :
+        MEMlok3 IS MEMlokB [ii] :
+        MEMlok4 IS MEMlokC [ii] :
+        SEQ
+          MEMlok1:= BYTE((INT MEMlok1) >< #FFFF)
+          MEMlok2:= BYTE((INT MEMlok2) >< #FFFF)
+          MEMlok3:= BYTE((INT MEMlok3) >< #FFFF)
+          MEMlok4:= BYTE((INT MEMlok4) >< #FFFF)
+  
+  :
+  --}}}
+  --{{{  PROC paint       (VAL INT x,y,c, VAL [10][10]INT muster)
+  PROC paint (VAL INT x,y,c, VAL [10][10]INT muster)
+    BYTE col :
+    SEQ
+      VAL offy IS (y TIMES BREIT) TIMES 10 :
+      VAL offx IS x TIMES 10 :
+  
+      SEQ xk=0 FOR 10
+        SEQ yk= 0 FOR 10
+          SEQ
+            --{{{  Farbe festlegen
+            IF
+              muster[yk][xk] = 1
+                col := BYTE c
+              TRUE
+                col := BYTE 0
+            --}}}
+            MEM[(xk + offx) + ((yk TIMES BREIT) + offy)] := col
+  
+  :
+  --}}}
+
+  #USE "hostio.lib"
+
+  [25][20]INT spiel :
+
+  SEQ
+    --{{{  Startwerte (Level)
+    verzlevel := 50
+    myverzlevel := 30
+    myanzlevel := 10
+    gwirrlevel := 5
+    knubberlevel := 3000
+    wartlevel := 5
+    wartlowlevel := 0
+    
+    hiscore := 0
+    --}}}
+
+    ENDE := FALSE
+    WHILE NOT ENDE
+      SEQ
+        --{{{  Startwerte (einmal pro Spiel zu setzen)
+        myverz := myverzlevel
+        myanz := myanzlevel
+        wartanz := wartlevel
+        
+        
+        SEQ i=0 FOR 4
+          SEQ
+            gverz[i]  := (i+1) TIMES verzlevel
+        
+        score := 0
+        --}}}
+
+        --ENDE := FALSE
+        WHILE NOT ENDE
+          SEQ
+            --{{{  Spielfeld Initialisieren
+            SEQ y=0 FOR 20
+              SEQ x=0 FOR 25
+                SEQ
+                  spiel[x][y] := BILD[y][x]
+            --}}}
+            --{{{  Startwerte (fuer jeden Bildschirm zu setzen)
+            myx := 10
+            myy := 13
+            myx.alt := myx
+            myy.alt := myy
+            myd := 0
+            mybew := TRUE
+            
+            knubberbar := FALSE
+            
+            SEQ i=0 FOR 4
+              SEQ
+                gx[i] := i + 8
+                gy[i] := 10
+                gx.alt[i] := gx[i]
+                gy.alt[i] := gy[i]
+                gbew[i]   := TRUE
+                gdir[i]   := 0
+                gwirr[i]  := gwirrlevel
+            
+                gwart[i]  := (i+1) TIMES (10 TIMES verzlevel)
+            
+            punktanz := 0
+            gnot := FALSE
+            mnot := FALSE
+            snot := FALSE
+            --}}}
+            cls()
+            --{{{  Spielfeld anzeigen
+            SEQ y=0 FOR 20
+              SEQ x=0 FOR 25
+                SEQ
+                  CASE (spiel[x][y] /\ LEER)
+                    MAUER
+                      SEQ
+                        --{{{  entsprechenden Stein zeichnen
+                        CASE (spiel[x][y]/\RICHTUNG)
+                          M
+                            paint(x,y,1,SM)
+                          MU
+                            paint(x,y,1,SMU)
+                          MUO
+                            paint(x,y,1,SMUO)
+                          MUR
+                            paint(x,y,1,SMUR)
+                          MUL
+                            paint(x,y,1,SMUL)
+                          MURL
+                            paint(x,y,1,SMURL)
+                          MUOR
+                            paint(x,y,1,SMUOR)
+                          MUOL
+                            paint(x,y,1,SMUOL)
+                          MUORL
+                            paint(x,y,1,SMUORL)
+                          MO
+                            paint(x,y,1,SMO)
+                          MOR
+                            paint(x,y,1,SMOR)
+                          MOL
+                            paint(x,y,1,SMOL)
+                          MORL
+                            paint(x,y,1,SMORL)
+                          MR
+                            paint(x,y,1,SMR)
+                          MRL
+                            paint(x,y,1,SMRL)
+                          ML
+                            paint(x,y,1,SML)
+                          ELSE
+                            SKIP
+                        --}}}
+                    PUNKT
+                      SEQ
+                        paint(x,y,2,KPUNKT)
+                        SKIP
+                    FETT
+                      SEQ
+                        paint(x,y,3,GPUNKT)
+                    ELSE
+                      SKIP
+            --}}}
+            --{{{  HIGHSCORE anzeigen
+            [10]BYTE zahl :
+            INT len,nullanz :
+            
+            SEQ
+              IF
+                hiscore <> 0
+                  SEQ
+                    --{{{  String initialisieren
+                    SEQ j=0 FOR 10
+                      SEQ
+                        zahl[j] := ' '
+                    --}}}
+                    INTTOSTRING (len,zahl,hiscore)
+                    nullanz :=5 - len
+                TRUE
+                  SEQ
+                    nullanz := 5
+                    len := 0
+            
+              --{{{  fuehrende Nullen ausgeben
+              SEQ i=25 FOR nullanz
+                SEQ
+                  paint(i,1,15,ZIFFER[0])
+              --}}}
+            
+              --{{{  Ziffer ausgeben
+              IF
+                len > 0
+                  SEQ
+                    SEQ i=0 FOR len
+                      SEQ
+                        paint(((i+25)+nullanz),1,15,ZIFFER[(INT zahl[i])-(INT '0')])
+                TRUE
+                  SKIP
+              --}}}
+            --}}}
+            --{{{  SCORE anzeigen
+            [10]BYTE zahl :
+            INT len,nullanz :
+            
+            SEQ
+              IF
+                score <> 0
+                  SEQ
+                    --{{{  String initialisieren
+                    SEQ j=0 FOR 10
+                      SEQ
+                        zahl[j] := ' '
+                    --}}}
+                    INTTOSTRING (len,zahl,score)
+                    nullanz :=5 - len
+                TRUE
+                  SEQ
+                    nullanz := 5
+                    len := 0
+            
+              --{{{  fuehrende Nullen ausgeben
+              SEQ i=25 FOR nullanz
+                SEQ
+                  paint(i,2,15,ZIFFER[0])
+              --}}}
+            
+              --{{{  Ziffer ausgeben
+              IF
+                len > 0
+                  SEQ
+                    SEQ i=0 FOR len
+                      SEQ
+                        paint(((i+25)+nullanz),2,15,ZIFFER[(INT zahl[i])-(INT '0')])
+                TRUE
+                  SKIP
+              --}}}
+            --}}}
+            --{{{  Mampf und Geist-Stand anzeigen (Startzustaende)
+            [10]BYTE zahl :
+            INT len,nullanz :
+            SEQ
+              paint(25,4,4,M1)
+              paint(27,4,15,ZIFFER[myanz - 1])
+            
+              SEQ i=5 FOR 4
+                SEQ
+                  paint(20+i,6,i,GEIST)
+            
+              paint(30,6,4,M1)
+            
+              SEQ i=25 FOR 4
+                SEQ
+                  paint(i,7,15,ZIFFER[0])
+            
+            --}}}
+
+            --{{{  Start nach Feuerknopf
+            WHILE joystick() >= 0
+              SKIP
+            --}}}
+
+            LEVELENDE := FALSE
+            WHILE NOT LEVELENDE
+              SEQ
+                --{{{  Joystick abfragen
+                myverz := myverz - 1
+                IF
+                  myverz = 0
+                    SEQ
+                      myverz := myverzlevel
+                      myd := joystick()
+                      IF
+                        (myd = 1) AND ((spiel[myx][myy]/\RECHTS) <> 0)
+                          SEQ
+                            myx.alt := myx
+                            myy.alt := myy
+                            myx := myx + 1
+                            mybew := TRUE
+                        (myd = 2) AND ((spiel[myx][myy]/\OBEN) <> 0)
+                          SEQ
+                            myx.alt := myx
+                            myy.alt := myy
+                            myy := myy - 1
+                            mybew := TRUE
+                        (myd = 3) AND ((spiel[myx][myy]/\LINKS) <> 0)
+                          SEQ
+                            myx.alt := myx
+                            myy.alt := myy
+                            myx := myx - 1
+                            mybew := TRUE
+                        (myd = 4) AND ((spiel[myx][myy]/\UNTEN) <> 0)
+                          SEQ
+                            myx.alt := myx
+                            myy.alt := myy
+                            myy := myy + 1
+                            mybew := TRUE
+                        TRUE
+                          SEQ
+                            myd := 0
+                            mybew := TRUE
+                  TRUE
+                    SKIP
+                --}}}
+                --{{{  Geister berechnen
+                
+                --{{{  Geister aufwecken
+                SEQ i=0 FOR 4
+                  SEQ
+                    IF
+                      gwart[i] > 0
+                        SEQ
+                          gwart[i] := gwart[i] - 1
+                          IF
+                            gwart[i] = 0
+                              SEQ
+                                gx.alt[i] := gx[i]
+                                gy.alt[i] := gy[i]
+                                gbew[i] := TRUE
+                                gx[i] := 12
+                                gy[i] := 8
+                            TRUE
+                              SKIP
+                      TRUE
+                        SKIP
+                --}}}
+                --{{{  Geister knubberbar ?
+                IF
+                  knubberbar
+                    SEQ
+                      knubber := knubber - 1
+                      IF
+                        knubber = 0
+                          SEQ
+                            knubberbar := FALSE
+                            SEQ i=0 FOR 4
+                              gbew[i] := TRUE
+                        TRUE
+                          SKIP
+                  TRUE
+                    SKIP
+                --}}}
+                --{{{  Die Geister suchen den Mampfer (oder rennen fort)
+                SEQ i=0 FOR 4
+                  SEQ
+                    IF
+                      gwart[i]=0
+                        SEQ
+                          gverz[i] := gverz[i] - 1
+                          IF
+                            gverz[i] = 0
+                              SEQ
+                                gverz[i] := (i+1) TIMES verzlevel
+                                IF
+                                  gdir[i] = 0
+                                    SEQ
+                                      IF
+                                        knubberbar
+                                          SEQ
+                                            --{{{  bewege Geist  (rennt fort)
+                                            IF
+                                              (myy > gy[i]) AND ((spiel[gx[i]][gy[i]]/\OBEN) <> 0)
+                                                SEQ
+                                                  gx.alt[i] := gx[i]
+                                                  gy.alt[i] := gy[i]
+                                                  gy[i] := gy[i] - 1
+                                                  gbew[i] := TRUE
+                                              (myy < gy[i]) AND ((spiel[gx[i]][gy[i]]/\UNTEN) <> 0)
+                                                SEQ
+                                                  gx.alt[i] := gx[i]
+                                                  gy.alt[i] := gy[i]
+                                                  gy[i] := gy[i] + 1
+                                                  gbew[i] := TRUE
+                                              (myx > gx[i]) AND ((spiel[gx[i]][gy[i]]/\RECHTS) <> 0)
+                                                SEQ
+                                                  gx.alt[i] := gx[i]
+                                                  gy.alt[i] := gy[i]
+                                                  gx[i] := gx[i] + 1
+                                                  gbew[i] := TRUE
+                                              (spiel[gx[i]][gy[i]]/\LINKS) <> 0
+                                                SEQ
+                                                  gx.alt[i] := gx[i]
+                                                  gy.alt[i] := gy[i]
+                                                  gx[i] := gx[i] - 1
+                                                  gbew[i] := TRUE
+                                                  IF
+                                                    (myx < gx[i])
+                                                      gwirr[i] := gwirr[i] - 1
+                                                    TRUE
+                                                      SKIP
+                                              TRUE
+                                                gwirr[i] := gwirr[i] - 1
+                                            
+                                            
+                                            
+                                            --}}}
+                                        TRUE
+                                          SEQ
+                                            --{{{  bewege Geist  (suchend)
+                                            IF
+                                              (myy < gy[i]) AND ((spiel[gx[i]][gy[i]]/\OBEN) <> 0)
+                                                SEQ
+                                                  gx.alt[i] := gx[i]
+                                                  gy.alt[i] := gy[i]
+                                                  gy[i] := gy[i] - 1
+                                                  gbew[i] := TRUE
+                                              (myy > gy[i]) AND ((spiel[gx[i]][gy[i]]/\UNTEN) <> 0)
+                                                SEQ
+                                                  gx.alt[i] := gx[i]
+                                                  gy.alt[i] := gy[i]
+                                                  gy[i] := gy[i] + 1
+                                                  gbew[i] := TRUE
+                                              (myx > gx[i]) AND ((spiel[gx[i]][gy[i]]/\RECHTS) <> 0)
+                                                SEQ
+                                                  gx.alt[i] := gx[i]
+                                                  gy.alt[i] := gy[i]
+                                                  gx[i] := gx[i] + 1
+                                                  gbew[i] := TRUE
+                                              (spiel[gx[i]][gy[i]]/\LINKS) <> 0
+                                                SEQ
+                                                  gx.alt[i] := gx[i]
+                                                  gy.alt[i] := gy[i]
+                                                  gx[i] := gx[i] - 1
+                                                  gbew[i] := TRUE
+                                                  IF
+                                                    (myx >=gx[i])
+                                                      gwirr[i] := gwirr[i] - 1
+                                                    TRUE
+                                                      SKIP
+                                              TRUE
+                                                gwirr[i] := gwirr[i] - 1
+                                            
+                                            
+                                            
+                                            --}}}
+                                      --{{{  haengt der Geist fest, so geht er bis zum Anstossen
+                                      IF
+                                        gwirr[i] = 0
+                                          SEQ
+                                            gwirr[i] := gwirrlevel
+                                            IF
+                                              (spiel[gx[i]][gy[i]]/\RECHTS) <> 0
+                                                gdir[i] := 1
+                                              (spiel[gx[i]][gy[i]]/\OBEN) <> 0
+                                                gdir[i] := 2
+                                              (spiel[gx[i]][gy[i]]/\LINKS) <> 0
+                                                gdir[i] := 3
+                                              (spiel[gx[i]][gy[i]]/\UNTEN) <> 0
+                                                gdir[i] := 4
+                                              TRUE
+                                                SKIP
+                                        TRUE
+                                          SKIP
+                                      
+                                      --}}}
+                
+                                  TRUE
+                                    SEQ
+                                      --{{{  bewege Geist (stur)
+                                      IF
+                                        ((spiel[gx[i]][gy[i]]/\RECHTS) <> 0) AND (gdir[i] = 1)
+                                          SEQ
+                                            gx.alt[i] := gx[i]
+                                            gy.alt[i] := gy[i]
+                                            gx[i] := gx[i] + 1
+                                            gbew[i] := TRUE
+                                      
+                                        ((spiel[gx[i]][gy[i]]/\LINKS) <> 0) AND (gdir[i] = 3)
+                                          SEQ
+                                            gx.alt[i] := gx[i]
+                                            gy.alt[i] := gy[i]
+                                            gx[i] := gx[i] - 1
+                                            gbew[i] := TRUE
+                                      
+                                        ((spiel[gx[i]][gy[i]]/\OBEN) <> 0) AND (gdir[i] = 2)
+                                          SEQ
+                                            gx.alt[i] := gx[i]
+                                            gy.alt[i] := gy[i]
+                                            gy[i] := gy[i] - 1
+                                            gbew[i] := TRUE
+                                      
+                                        ((spiel[gx[i]][gy[i]]/\UNTEN) <> 0) AND (gdir[i] = 4)
+                                          SEQ
+                                            gx.alt[i] := gx[i]
+                                            gy.alt[i] := gy[i]
+                                            gy[i] := gy[i] + 1
+                                            gbew[i] := TRUE
+                                      
+                                        TRUE
+                                          SEQ
+                                            gdir[i] := 0
+                                      --}}}
+                
+                            TRUE
+                              SKIP
+                      TRUE
+                        SKIP
+                --}}}
+                
+                
+                --}}}
+                --{{{  Bild erneuern
+                --{{{  male Mampfer
+                IF
+                  mybew
+                    SEQ
+                      mybew := FALSE
+                      paint(myx.alt,myy.alt,0,M0)
+                      CASE myd
+                        0
+                          paint(myx,myy,4,M0)
+                        1
+                          paint(myx,myy,4,M1)
+                        2
+                          paint(myx,myy,4,M2)
+                        3
+                          paint(myx,myy,4,M3)
+                        4
+                          paint(myx,myy,4,M4)
+                        ELSE
+                          SKIP
+                  TRUE
+                    SKIP
+                --}}}
+                --{{{  male Geister
+                [4]INT colors :
+                SEQ
+                  IF
+                    NOT knubberbar
+                      colors := [5,6,7,8]
+                    TRUE
+                      colors := [3,3,3,3]
+                
+                  SEQ I=0 FOR 4
+                    SEQ
+                      IF
+                        gbew[I]
+                          SEQ
+                            gbew[I] := FALSE
+                            CASE (spiel[gx.alt[I]][gy.alt[I]] /\ LEER)
+                              PUNKT
+                                SEQ
+                                  paint(gx.alt[I],gy.alt[I],2,KPUNKT)
+                                  SKIP
+                              FETT
+                                SEQ
+                                  paint(gx.alt[I],gy.alt[I],3,GPUNKT)
+                              LEER
+                                SEQ
+                                  paint(gx.alt[I],gy.alt[I],0,GEIST)
+                              ELSE
+                                SKIP
+                            paint(gx[I],gy[I],colors[I],GEIST)
+                        TRUE
+                          SKIP
+                --}}}
+                
+                --}}}
+                --{{{  Stand auswerten
+                --{{{  Mampfer gefunden ?
+                SEQ i=0 FOR 4
+                  SEQ
+                    IF
+                      (myy = gy[i]) AND (myx = gx[i])
+                        SEQ
+                          gx.alt[i] := gx[i]
+                          gy.alt[i] := gy[i]
+                          gx[i] := i + 8
+                          gy[i] := 10
+                          gwart[i] := (i+1) TIMES (10 TIMES verzlevel)
+                          gbew[i] := TRUE
+                          gverz[i] := (i+1) TIMES verzlevel
+                          gdir[i]   := 0
+                          IF
+                            knubberbar
+                              SEQ
+                                snot := TRUE
+                                score := score + 20
+                            TRUE
+                              SEQ
+                                mnot := TRUE
+                                myanz := myanz - 1
+                                --{{{  Spielende ?
+                                IF
+                                  myanz = 0
+                                    SEQ
+                                      ENDE := TRUE
+                                      LEVELENDE := TRUE
+                                      IF
+                                        score > hiscore
+                                          hiscore := score
+                                        TRUE
+                                          SKIP
+                                  TRUE
+                                    SKIP
+                                --}}}
+                      TRUE
+                        SKIP
+                --}}}
+                --{{{  Punkt gemampft ?
+                IF
+                  (spiel[myx][myy] /\ LEER) = PUNKT
+                    SEQ
+                      spiel[myx][myy] := spiel[myx][myy]\/LEER
+                      score := score + 1
+                      snot := TRUE
+                      punktanz := punktanz + 1
+                  (spiel[myx][myy] /\ LEER) = FETT
+                    SEQ
+                      gnot := TRUE
+                      knubberbar := TRUE
+                      knubber := knubberlevel
+                      spiel[myx][myy] := spiel[myx][myy]\/LEER
+                      SEQ i=0 FOR 4
+                        gbew[i] := TRUE
+                      score := score + 5
+                      snot := TRUE
+                      punktanz := punktanz + 1
+                  TRUE
+                    SKIP
+                --}}}
+                --{{{  Bild fertig ?
+                IF
+                  punktanz = 218
+                    SEQ
+                      SEQ i=0 FOR 10
+                        SEQ
+                          inv()
+                
+                      --{{{  neuer Level
+                      LEVELENDE := TRUE
+                      myverz := myverz - 5
+                      
+                      IF
+                        myanz < myanzlevel
+                          SEQ
+                            myanz := myanz + 1
+                            mnot := TRUE
+                        TRUE
+                          SKIP
+                      
+                      
+                      SEQ i=0 FOR 4
+                        SEQ
+                          gverz[i]  := (i+1) TIMES verzlevel
+                      
+                      wartanz := wartanz - 1
+                      IF
+                        wartanz < wartlowlevel
+                          wartanz := wartlevel
+                        TRUE
+                          SKIP
+                      --}}}
+                  TRUE
+                    SKIP
+                --}}}
+                --}}}
+
+                PAR
+                  SEQ
+                    --{{{  SCORE anzeigen
+                    [10]BYTE zahl :
+                    INT len,nullanz :
+                    
+                    SEQ
+                      IF
+                        snot
+                          SEQ
+                            snot := FALSE
+                            IF
+                              score <> 0
+                                SEQ
+                                  --{{{  String initialisieren
+                                  SEQ j=0 FOR 10
+                                    SEQ
+                                      zahl[j] := ' '
+                                  --}}}
+                                  INTTOSTRING (len,zahl,score)
+                                  nullanz :=5 - len
+                              TRUE
+                                SEQ
+                                  nullanz := 5
+                                  len := 0
+                    
+                            --{{{  fuehrende Nullen ausgeben
+                            SEQ i=25 FOR nullanz
+                              SEQ
+                                paint(i,2,15,ZIFFER[0])
+                            --}}}
+                    
+                            --{{{  Ziffer ausgeben
+                            IF
+                              len > 0
+                                SEQ
+                                  SEQ i=0 FOR len
+                                    SEQ
+                                      paint(((i+25)+nullanz),2,15,ZIFFER[(INT zahl[i])-(INT '0')])
+                              TRUE
+                                SKIP
+                            --}}}
+                        TRUE
+                          SKIP
+                    --}}}
+                    --{{{  Mampf und Geist-Stand anzeigen
+                    [10]BYTE zahl :
+                    INT len,nullanz :
+                    SEQ
+                      IF
+                        mnot
+                          SEQ
+                            mnot := FALSE
+                            paint(25,4,4,M1)
+                            IF
+                              myanz > 0
+                                paint(27,4,15,ZIFFER[myanz - 1])
+                              TRUE
+                                SKIP
+                        TRUE
+                          SKIP
+                      IF
+                        gnot
+                          SEQ
+                            IF
+                              knubberbar
+                                SEQ
+                                  IF
+                                    (knubber REM 100) = 0
+                                      SEQ
+                                        SEQ i=0 FOR 4
+                                          SEQ
+                                            paint(25+i,6,3,GEIST)
+                                        paint(30,6,4,M3)
+                                        IF
+                                          knubber <> 0
+                                            SEQ
+                                              --{{{  String initialisieren
+                                              SEQ j=0 FOR 10
+                                                SEQ
+                                                  zahl[j] := ' '
+                                              --}}}
+                                              INTTOSTRING (len,zahl,knubber)
+                                              nullanz :=4 - len
+                                          TRUE
+                                            SEQ
+                                              nullanz := 4
+                                              len := 0
+                    
+                                        --{{{  fuehrende Nullen ausgeben
+                                        SEQ i=25 FOR nullanz
+                                          SEQ
+                                            paint(i,7,15,ZIFFER[0])
+                                        --}}}
+                    
+                                        --{{{  Ziffer ausgeben
+                                        IF
+                                          len > 0
+                                            SEQ
+                                              SEQ i=0 FOR len
+                                                SEQ
+                                                  paint(((i+25)+nullanz),7,15,ZIFFER[(INT zahl[i])-(INT '0')])
+                                          TRUE
+                                            SKIP
+                                        --}}}
+                                    TRUE
+                                      SKIP
+                              gnot
+                                SEQ
+                                  gnot := FALSE
+                                  SEQ i=5 FOR 4
+                                    SEQ
+                                      paint(20+i,6,i,GEIST)
+                                  paint(30,6,4,M1)
+                    
+                                  SEQ i=25 FOR 4
+                                    SEQ
+                                      paint(i,7,15,ZIFFER[0])
+                              TRUE
+                                SKIP
+                        TRUE
+                          SKIP
+                    --}}}
+                  warte (wartanz << 3)
+                  --warte (1)
+            IF
+              ENDE
+                --{{{  Am Ende auf Feuerknopf warten
+                WHILE joystick() >= 0
+                  SKIP
+                --}}}
+              TRUE
+                SKIP
+    so.exit(fs,ts,sps.success)
+:

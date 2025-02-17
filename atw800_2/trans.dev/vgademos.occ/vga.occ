@@ -1,0 +1,1295 @@
+#INCLUDE "hostio.inc"
+#INCLUDE "VGA.INC"
+
+--VAL VGADEBUG IS TRUE:
+VAL VGADEBUG IS FALSE:
+
+--{{{  ATW800/2 Settings
+
+--
+-- ATW800/2 fix 1024x768x8
+--
+VAL MAXX        IS 1024:
+VAL MAXY        IS 768:
+VAL COLMASK     IS 255:
+VAL XSTRIDE     IS MAXX:
+VAL XOFFSET     IS 0:
+VAL MAXSCREEN   IS 1:
+--
+-- ATW800/2 fix 1280x800x8
+--
+--VAL MAXX        IS 1280:
+--VAL MAXY        IS 800:
+--VAL COLMASK     IS 255:
+--VAL XSTRIDE     IS MAXX:
+--VAL XOFFSET     IS 0:
+--VAL MAXSCREEN   IS 1:
+--
+-- ATW800/2 fix 1440x960x8 Splitscreen
+--
+--VAL MAXX        IS 800:
+--VAL MAXY        IS 960:
+--VAL COLMASK     IS 255:
+--VAL XSTRIDE     IS 1440:
+--VAL XOFFSET     IS 640:
+--VAL MAXSCREEN   IS 0:
+
+--
+VAL VGAMOD      IS 1:
+--
+VAL SCREENBASE  IS (#00600000 >> 2) :
+VAL PALBASE     IS (#C0000000 >> 2) :
+VAL VERBASE     IS (#C0000400 >> 2) :
+--VAL VTGBASE1    IS (#C0001000 >> 2) :
+VAL VTGBASE     IS (#C0001000 >> 2) :
+VAL BLTBASE     IS (#C0001040 >> 2) :
+--
+-- VGA Server Buffersize
+--
+VAL PUFGROS IS 10000:
+--}}}
+
+#USE "hostio.lib"
+#USE "convert.lib"
+
+PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
+
+  --{{{  Globale Variablen (Server - Einstellungen)
+  BOOL RAND :                                 -- Umrandung bei Polyfill
+  BOOL SCHATTENFLAG :                         -- Zeichnen im Schatten oder Bild
+  INT BREIT :                                 -- Byte pro Zeile
+  INT AKTANZ :                                -- Byte pro Seite
+  INT CLIPMINX,CLIPMINY,CLIPMAXX,CLIPMAXY :   -- Grenzen des Clipping-Windows
+  INT S :                                     -- Byte offset aktuelle logische Seite
+  INT S64 :                                   -- INT64 offset (S >> 3)
+  INT LINMASK,LINMODE,LINBREIT :              -- Linienattribute
+  INT HINTERGRUND,MAUSFARBE :                 -- Farben von Hintergrund u. Maus
+  INT SPRITEMODUS :
+  [32]INT MUSTERMASK :                        -- eingestelltes Fuellmuster
+  [(MAXX*MAXY)>>3]INT64 save64 :
+  INT PLINESTART,PLINEENDE :                  -- Polylineattribute
+  --}}}
+  --{{{  Debug-Tools
+  PROC dbgint(CHAN OF SP fs,ts, VAL []BYTE t,VAL INT v)
+    [20]BYTE lp :
+    INT lplen :
+    SEQ
+      so.write.string(fs,ts,t)
+      INTTOSTRING(lplen,lp,v)
+      so.write.string.nl(fs,ts,[lp FROM 0 FOR lplen])
+  :
+  --}}}
+  --
+  --
+  --
+  -- VGA - Server PROCs
+  --
+  --
+  --
+  --{{{  Place Screen
+  
+  [#00200000]BYTE screen :
+  PLACE screen AT SCREENBASE :
+  --}}}
+
+  --{{{  Place ATW-Register
+  CHAN OF ANY vbl :
+  PLACE vbl AT 8 :
+  --[16]INT  vtgregs1 :
+  [16]INT  vtgregs :
+  [16]INT  verregs :
+  [256]INT palregs :
+  [16]INT  bltregs :
+  PLACE palregs AT PALBASE :
+  PLACE verregs AT VERBASE :
+  PLACE vtgregs AT VTGBASE :
+  --PLACE vtgregs1 AT VTGBASE1 :
+  PLACE bltregs AT BLTBASE :
+  --}}}
+  --{{{  Hilfs - Programme
+  --
+  -- Hilfprogramme Hardware-Unabhaengig
+  -- (aufgerufen von Hardware-Unabhaengigen Prozeduren)
+  --
+  --{{{  BOOL FUNCTION dither(VAL INT x,y,c)
+  BOOL FUNCTION dither(VAL INT x,y,c)
+    VAL dmat IS [[ 0,32, 8,40, 2,34,10,42],
+                 [48,16,56,24,50,18,58,26],
+                 [12,44, 4,36,14,46, 6,38],
+                 [60,28,52,20,62,30,54,22],
+                 [ 3,35,11,43, 1,33, 9,41],
+                 [51,19,59,27,49,17,57,25],
+                 [15,47, 7,39,13,45, 5,37],
+                 [63,31,55,23,61,29,53,21]] :
+  
+    BOOL d:
+  
+    VALOF
+      SEQ
+        IF
+          (c REM 64) > dmat[x REM 8][y REM 8]
+            d := TRUE
+          TRUE
+            d := FALSE
+      RESULT d
+  :
+  --}}}
+  --{{{  SIN + COS Funktionen auf Integerbasis
+  --{{{  INT FUNCTION sing (VAL INT winkel)
+  INT  FUNCTION sing(VAL INT winkel)
+    --{{{  SINUS-Tabelle 0..90 (einschliesslich) Grad == 0 .. 32768
+    VAL []INT wert  IS [   0,   572,   1144,   1715,
+                        2286,   2856,   3425,   3993,
+                        4560,   5126,   5690,   6252,
+                        6813,   7371,   7927,   8481,
+                        9032,   9580,   10126,   10668,
+                        11207,   11743,   12275,   12803,
+                        13328,   13848,   14364,   14876,
+                        15383,   15886,   16383,   16876,
+                        17364,   17846,   18323,   18794,
+                        19260,   19720,   20173,   20621,
+                        21062,   21497,   21925,   22347,
+                        22762,   23170,   23571,   23964,
+                        24351,   24730,   25101,   25465,
+                        25821,   26169,   26509,   26841,
+                        27165,   27481,   27788,   28087,
+                        28377,   28659,   28932,   29196,
+                        29451,   29697,   29934,   30162,
+                        30381,   30591,   30791,   30982,
+                        31163,   31335,   31498,   31650,
+                        31794,   31927,   32051,   32165,
+                        32269,   32364,   32448,   32523,
+                        32587,   32642,   32687,   32722,
+                        32747,   32762,   32768] :
+    --}}}
+    INT x,erg :
+    VALOF
+      SEQ
+        --{{{  Winkel reduzieren auf 0..359 Grad
+        x := winkel
+        WHILE (x < 0)
+          x := x + 360
+        
+        WHILE (x > 359)
+          x := x - 360
+        --}}}
+  
+        IF
+          x <= 90
+            erg := wert[x]
+          x <= 180
+            erg := wert[180-x]
+          x <= 270
+            erg := -wert[x-180]
+          TRUE
+            erg := -wert[360-x]
+      RESULT erg
+  :
+  --}}}
+  --{{{  INT FUNCTION cosg (VAL INT winkel)
+  INT FUNCTION cosg(VAL INT winkel)
+    VALOF
+      SKIP
+      RESULT sing(winkel + 90)
+  :
+  --}}}
+  --}}}
+  --}}}
+  --{{{  Hilfsprogramme fuer Graphikbefehle (Line, Getpixel ...)
+  --{{{  PROC linep  (VAL INT x1,y2,x3,y3,c)
+  --
+  -- Linie ziehen
+  --
+  PROC linep(VAL INT x1,y1,x3,y3,c)
+    INT x2,y2,dx,dy,e,xs,ys:
+    INT linmask,col :
+    SEQ
+      IF
+        SCHATTENFLAG
+          SKIP --UMA linep.s(x1,y11,x3,y33,c)
+        TRUE
+          --{{{  Linie im Bildschirm
+          SEQ
+            --y1 := S + y11
+            --y3 := S + y33
+            CASE LINMODE
+              TRANSPARENT
+                --{{{  Transparente Linie
+                SEQ
+                  linmask := LINMASK
+                
+                  dx := x3 - x1
+                  dy := y3 - y1
+                  x2 := x1
+                  y2 := y1
+                  IF
+                    dx < 0
+                      SEQ
+                        dx := -dx
+                        xs := -1
+                    TRUE
+                      SEQ
+                        xs := 1
+                  IF
+                    dy < 0
+                      SEQ
+                        dy := -dy
+                        ys := -1
+                    TRUE
+                      SEQ
+                        ys := 1
+                  IF
+                    dy = 0
+                      e := -1
+                    TRUE
+                      e := 0
+                
+                  SEQ
+                    WHILE (x2 <> x3) OR (y2 <> y3)
+                      SEQ
+                        --{{{  Punkt setzen x2,y2,c
+                        linmask := ROTATELEFT(linmask,1)
+                        IF
+                          (linmask /\ 1) = 1
+                            SEQ
+                              CASE VGAMOD
+                                1
+                                  SEQ
+                                    --{{{  256 Farb - Modus
+                                    screen[(S+XOFFSET)+((y2 TIMES XSTRIDE)+x2)] := BYTE c
+                                    --}}}
+                          TRUE
+                            SKIP
+                        --}}}
+                        IF
+                          e >= 0
+                            SEQ
+                              y2 := y2 + ys
+                              e  := e  - dx
+                          TRUE
+                            SEQ
+                              x2 := x2 + xs
+                              e  := e  + dy
+                    --{{{  Punkt setzen x2,y2,c
+                    linmask := ROTATELEFT(linmask,1)
+                    IF
+                      (linmask /\ 1) = 1
+                        SEQ
+                          CASE VGAMOD
+                            1
+                              SEQ
+                                --{{{  256 Farb - Modus
+                                screen[(S+XOFFSET)+((y2 TIMES XSTRIDE)+x2)] := BYTE c
+                                --}}}
+                      TRUE
+                        SKIP
+                    --}}}
+                --}}}
+              DECKEND
+                --{{{  Deckende Linie
+                SEQ
+                  linmask := LINMASK
+                
+                  dx := x3 - x1
+                  dy := y3 - y1
+                  x2 := x1
+                  y2 := y1
+                  IF
+                    dx < 0
+                      SEQ
+                        dx := -dx
+                        xs := -1
+                    TRUE
+                      SEQ
+                        xs := 1
+                  IF
+                    dy < 0
+                      SEQ
+                        dy := -dy
+                        ys := -1
+                    TRUE
+                      SEQ
+                        ys := 1
+                  IF
+                    dy = 0
+                      e := -1
+                    TRUE
+                      e := 0
+                
+                  SEQ
+                    WHILE (x2 <> x3) OR (y2 <> y3)
+                      SEQ
+                        --{{{  Punkt setzen x2,y2,c
+                        linmask := ROTATELEFT(linmask,1)
+                        IF
+                          (linmask /\ 1) = 1
+                            col := c
+                          TRUE
+                            col := 0
+                        SEQ
+                          CASE VGAMOD
+                            1
+                              SEQ
+                                --{{{  256 Farb - Modus
+                                screen[(S+XOFFSET)+((y2 TIMES XSTRIDE)+x2)] := BYTE col
+                                --}}}
+                        --}}}
+                        IF
+                          e >= 0
+                            SEQ
+                              y2 := y2 + ys
+                              e  := e  - dx
+                          TRUE
+                            SEQ
+                              x2 := x2 + xs
+                              e  := e  + dy
+                    --{{{  Punkt setzen x2,y2,c
+                    linmask := ROTATELEFT(linmask,1)
+                    IF
+                      (linmask /\ 1) = 1
+                        col := c
+                      TRUE
+                        col := 0
+                    SEQ
+                      CASE VGAMOD
+                        1
+                          SEQ
+                            --{{{  256 Farb - Modus
+                            screen[(S+XOFFSET)+((y2 TIMES XSTRIDE)+x2)] := BYTE col
+                            --}}}
+                    --}}}
+                --}}}
+              INVERTIEREND
+                --{{{  Invertierende Linie
+                SEQ
+                  linmask := LINMASK
+                
+                  dx := x3 - x1
+                  dy := y3 - y1
+                  x2 := x1
+                  y2 := y1
+                  IF
+                    dx < 0
+                      SEQ
+                        dx := -dx
+                        xs := -1
+                    TRUE
+                      SEQ
+                        xs := 1
+                  IF
+                    dy < 0
+                      SEQ
+                        dy := -dy
+                        ys := -1
+                    TRUE
+                      SEQ
+                        ys := 1
+                  IF
+                    dy = 0
+                      e := -1
+                    TRUE
+                      e := 0
+                
+                  SEQ
+                    WHILE (x2 <> x3) OR (y2 <> y3)
+                      SEQ
+                        --{{{  Punkt setzen x2,y2,c
+                        linmask := ROTATELEFT(linmask,1)
+                        IF
+                          (linmask /\ 1) = 1
+                            SEQ
+                              CASE VGAMOD
+                                1
+                                  SEQ
+                                    --{{{  256 Farb - Modus
+                                    MEMlok IS screen[(S+XOFFSET)+((y2 TIMES XSTRIDE) + x2)] :
+                                    SEQ
+                                      MEMlok := BYTE ((INT MEMlok)><c)
+                                    --}}}
+                          TRUE
+                            SKIP
+                        --}}}
+                        IF
+                          e >= 0
+                            SEQ
+                              y2 := y2 + ys
+                              e  := e  - dx
+                          TRUE
+                            SEQ
+                              x2 := x2 + xs
+                              e  := e  + dy
+                    --{{{  Punkt setzen x2,y2,c
+                    linmask := ROTATELEFT(linmask,1)
+                    IF
+                      (linmask /\ 1) = 1
+                        SEQ
+                          CASE VGAMOD
+                            1
+                              SEQ
+                                --{{{  256 Farb - Modus
+                                MEMlok IS screen[(S+XOFFSET)+((y2 TIMES XSTRIDE) + x2)] :
+                                SEQ
+                                  MEMlok := BYTE ((INT MEMlok)><c)
+                                --}}}
+                      TRUE
+                        SKIP
+                    --}}}
+                --}}}
+              ELSE
+                SKIP
+          --}}}
+  :
+  --}}}
+  --{{{  PROC hlinep (VAL INT x1,x2,y,c)
+  --
+  -- Horizontale Linie ziehen
+  --
+  PROC hlinep(VAL INT x1,x2,y,c)
+  
+    --{{{  Lokale Variablen + Masken fuer Linienstart und Ende
+    VAL [8]INT start IS [ 255,127, 63, 31, 15,  7,  3,  1] :
+    VAL [8]INT end   IS [ 128,192,224,240,248,252,254,255] :
+    INT xstart,xend :
+    INT linmask :
+    --}}}
+    SEQ
+      IF
+        SCHATTENFLAG
+          SKIP --UMA hlinep.s(x1,x2,yy,c)
+        TRUE
+          --{{{  Horizontale Linie im Bildschirm
+          SEQ
+            --y := S + yy
+            SEQ
+              --{{{  Start und Ende bestimmen (X-Koordinate)
+              IF
+                x1 > x2
+                  SEQ
+                    xstart := x2
+                    xend   := x1
+                x1 < x2
+                  SEQ
+                    xstart := x1
+                    xend   := x2
+                TRUE
+                  SEQ
+                    xstart := x1
+                    xend   := x1
+              IF
+                xend > CLIPMAXX
+                  xend := CLIPMAXX
+                TRUE
+                  SKIP
+              IF
+                xstart < CLIPMINX
+                  xstart := CLIPMINX
+                TRUE
+                  SKIP
+              IF
+                xend < xstart
+                  xstart := xend
+                TRUE
+                  SKIP
+              --}}}
+          
+              IF
+                (xend >= CLIPMINX) AND (NOT (xend = xstart))
+                  SEQ
+                    linmask := LINMASK
+                    CASE LINMODE
+                      TRANSPARENT
+                        --{{{  Transparente Linie
+                        SEQ
+                          CASE VGAMOD
+                            1
+                              SEQ
+                                --{{{  256 Farb - Modus
+                                linmask := ROTATELEFT(linmask,xstart /\ 31)
+                                MEMlok IS [screen FROM ((S+XOFFSET) + (y TIMES XSTRIDE)) + xstart FOR (xend-xstart)+1] :
+                                SEQ i=0 FOR (xend-xstart)+1
+                                  SEQ
+                                    linmask := ROTATELEFT(linmask,1)
+                                    IF
+                                      (linmask /\ 1) = 1
+                                        MEMlok[i] := BYTE c
+                                      TRUE
+                                        SKIP
+                                --}}}
+                        --}}}
+                      DECKEND
+                        --{{{  Deckende Linie
+                        SEQ
+                          CASE VGAMOD
+                            1
+                              SEQ
+                                --{{{  256 Farb - Modus
+                                linmask := ROTATELEFT(linmask,xstart /\ 31)
+                                MEMlok IS [screen FROM ((S+XOFFSET)+(y TIMES XSTRIDE)) + xstart FOR (xend-xstart)+1] :
+                                SEQ i=0 FOR (xend-xstart)+1
+                                  SEQ
+                                    linmask := ROTATELEFT(linmask,1)
+                                    IF
+                                      (linmask /\ 1) = 1
+                                        MEMlok[i] := BYTE c
+                                      TRUE
+                                        MEMlok[i] := BYTE HINTERGRUND
+                                --}}}
+                        --}}}
+                      INVERTIEREND
+                        --{{{  Invertierende Linie
+                        SEQ
+                          CASE VGAMOD
+                            1
+                              SEQ
+                                --{{{  256 Farb - Modus
+                                MEMlok IS [screen FROM ((S+XOFFSET)+(y TIMES XSTRIDE)) + xstart FOR (xend-xstart)+1] :
+                                SEQ
+                                  linmask := ROTATELEFT(linmask,xstart /\ 31)
+                                  SEQ i=0 FOR (xend-xstart)+1
+                                    SEQ
+                                      linmask := ROTATELEFT(linmask,1)
+                                      IF
+                                        (linmask /\ 1) = 1
+                                          MEMlok1 IS MEMlok[i] :
+                                          SEQ
+                                            MEMlok1 := BYTE ((INT MEMlok1)><c)
+                                        TRUE
+                                          SKIP
+                                --}}}
+                        --}}}
+                      ELSE
+                        SKIP
+                TRUE
+                  SKIP
+          --}}}
+  :
+  --}}}
+  --{{{  PROC getpointp (VAL INT x,y , INT c)
+  --
+  -- Graphik-Pixel testen
+  --
+  PROC getpointp(VAL INT x,y,INT c)
+    SEQ
+      IF
+        SCHATTENFLAG
+          SKIP
+        TRUE
+          SEQ
+            IF
+              (x>CLIPMAXX)OR(y>CLIPMAXY)OR(x<CLIPMINX)OR(y<CLIPMINY)
+                c:=#FF
+              TRUE
+                SEQ
+                  --y := S + yy
+                  CASE VGAMOD
+                    1
+                      SEQ
+                        --{{{  256 Farb - Modus
+                        c := (INT screen[(S+XOFFSET)+((y TIMES XSTRIDE) + x)])/\#FF
+                        --}}}
+  :
+  --}}}
+  --}}}
+
+  --{{{  Server-Aufrufe zum Setzen Globaler Werte
+  --{{{  PROC setclipwin (CHAN OF CLIPWINP vom.user)
+  PROC setclipwin (CHAN OF CLIPWINP vom.user)
+    SEQ
+      vom.user ? CLIPMINX;CLIPMINY;CLIPMAXX;CLIPMAXY
+  :
+  --}}}
+  --{{{  PROC setlinmask (CHAN OF LINMASKP vom.user)
+  PROC setlinmask (CHAN OF LINMASKP vom.user)
+    SEQ
+      vom.user ? LINMASK
+  :
+  --}}}
+  --{{{  PROC setlinmode (CHAN OF LINMODEP vom.user)
+  PROC setlinmode (CHAN OF LINMODEP vom.user)
+    SEQ
+      vom.user ? LINMODE
+  :
+  --}}}
+  --{{{  PROC setlinbreit(CHAN OF LINBREITP vom.user)
+  PROC setlinbreit (CHAN OF LINBREITP vom.user)
+    SEQ
+      vom.user ? LINBREIT
+      LINBREIT := LINBREIT \/ 1
+  :
+  --}}}
+  --{{{  PROC setlinends(CHAN OF LINENDSP vom.user)
+  PROC setlinends (CHAN OF LINENDSP vom.user)
+    SEQ
+      vom.user ? PLINESTART;PLINEENDE
+      PLINESTART:=PLINESTART REM 3
+      PLINEENDE:=PLINEENDE REM 3
+  :
+  --}}}
+  --{{{  PROC setmusmask (CHAN OF ANY vom.user)
+  PROC setmusmask (CHAN OF ANY vom.user)
+    SEQ
+      SEQ i=0 FOR 32
+        vom.user ? MUSTERMASK[i]
+  :
+  --}}}
+  --}}}
+
+  --{{{  init
+  PROC init(CHAN OF INITP vom.user,CHAN OF INITANTWP zum.user)
+    INT modus,freq :
+    SEQ
+      vom.user ? modus;freq
+      zum.user ! MAXX;MAXY;COLMASK+1;MAXSCREEN+1
+      CLIPMINX,CLIPMINY,CLIPMAXX,CLIPMAXY := 0,0,(MAXX-1),(MAXY-1)
+      LINMASK,LINMODE,LINBREIT :=#FFFFFFFF,DECKEND,1
+      S,S64:=0,0
+      --vtgregs[14] := #00000001
+  :
+  --}}}
+  --{{{  Timer tstart/tstop
+  
+  INT s,e :
+  REAL32 fdur :
+  TIMER t :
+  PROC tstart()
+    SEQ
+      t ? s
+  :
+  PROC tstop(CHAN OF TSTOPANTWP zum.user)
+    SEQ
+      t ? e
+      fdur := 0.000064(REAL32)*(REAL32 ROUND (e-s))
+      zum.user ! fdur
+  :
+  --}}}
+  --{{{  rawtext
+  
+  [20]INT buffer:
+  PROC rawtext(CHAN OF SP fs,ts,CHAN OF ANY vom.user)
+    INT len:
+    INT c:
+    SEQ
+      vom.user ? c
+      len:=0
+      WHILE c <> 0
+        SEQ
+          buffer[len]:=c
+          len:=len+1
+          vom.user ? c
+      IF
+        VGADEBUG
+          SEQ
+            dbgint(fs,ts,"String len: ",(len*4))
+        TRUE
+          SKIP
+      []BYTE b8 RETYPES buffer :
+      SEQ
+        so.write.string(fs,ts,[b8 FROM 0 FOR (len*4)])
+  :
+  --}}}
+
+  --{{{  line (with cliping and pattern)
+  --
+  -- Linie ziehen
+  --
+  PROC line(CHAN OF LINEP vom.user)
+  
+    INT x1,y1,x3,y3,c,s1,s3,xst,yst,xen,yen :
+    REAL32 u1,u2,r:
+    [4]INT p,q    :
+  
+    SEQ
+      vom.user ? x1;y1;x3;y3;c
+      --{{{  Pruefe Punkt1
+      IF
+        x1<CLIPMINX
+          s1:=1
+        TRUE
+          s1:=0
+      IF
+        x1>CLIPMAXX
+          s1:=s1\/2
+        TRUE
+          SKIP
+      IF
+        y1>CLIPMAXY
+          s1:=s1\/4
+        TRUE
+          SKIP
+      IF
+        y1<CLIPMINY
+          s1:=s1\/8
+        TRUE
+          SKIP
+      --}}}
+      --{{{  Pruefe Punkt3
+      IF
+        x3<CLIPMINX
+          s3:=1
+        TRUE
+          s3:=0
+      IF
+        x3>CLIPMAXX
+          s3:=s3\/2
+        TRUE
+          SKIP
+      IF
+        y3>CLIPMAXY
+          s3:=s3\/4
+        TRUE
+          SKIP
+      IF
+        y3<CLIPMINY
+          s3:=s3\/8
+        TRUE
+          SKIP
+      --}}}
+      IF
+        (s1=0) AND (s3=0)  -- Linie ist ganz sichtbar
+          linep(x1,y1,x3,y3,c)
+        TRUE
+          SEQ
+            IF
+              (s1 /\ s3) = 0   -- Linie koennte  z.T. sichtbar sein
+                --{{{  Clipping
+                SEQ
+                  p[0] := x1 - x3
+                  p[1] := x3 - x1
+                  p[2] := y1 - y3
+                  p[3] := y3 - y1
+                  q[0] := x1 - CLIPMINX
+                  q[1] := CLIPMAXX - x1
+                  q[2] := y1 - CLIPMINY
+                  q[3] := CLIPMAXY - y1
+                
+                  IF
+                    p[0] = 0
+                      --{{{  senkrecht
+                      IF
+                        (x1<CLIPMINX) OR (x1>CLIPMAXX)
+                          SKIP
+                        TRUE
+                          SEQ
+                            xst := x1
+                            xen := x1
+                            IF
+                              (y1<CLIPMINY)
+                                yst := CLIPMINY
+                              (y1>CLIPMAXY)
+                                yst := CLIPMAXY
+                              TRUE
+                                yst := y1
+                            IF
+                              (y3<CLIPMINY)
+                                yen := CLIPMINY
+                              (y3>CLIPMAXY)
+                                yen := CLIPMAXY
+                              TRUE
+                                yen := y3
+                            linep(xst,yst,xen,yen,c)
+                      --}}}
+                    TRUE
+                      IF
+                        p[2] = 0
+                          --{{{  waagrecht
+                          SEQ
+                            IF
+                              (y1<CLIPMINY) OR (y1>CLIPMAXY)
+                                SKIP
+                              TRUE
+                                SEQ
+                                  yst := y1
+                                  yen := y1
+                                  IF
+                                    (x1<CLIPMINX)
+                                      xst := CLIPMINX
+                                    (x1>CLIPMAXX)
+                                      xst := CLIPMAXX
+                                    TRUE
+                                      xst := x1
+                                  IF
+                                    (x3<CLIPMINX)
+                                      xen := CLIPMINX
+                                    (x3>CLIPMAXX)
+                                      xen := CLIPMAXX
+                                    TRUE
+                                      xen := x3
+                                  hlinep(xst,xen,y1,c)
+                          --}}}
+                        TRUE
+                          --{{{  schraeg
+                          SEQ
+                            u1 := 0.0(REAL32)
+                            u2 := 1.0(REAL32)
+                            --{{{  suche Grenzen
+                            SEQ i=0 FOR 4
+                              SEQ
+                                r := (REAL32 ROUND q[i]) / (REAL32 ROUND p[i])
+                                IF
+                                  p[i] <0
+                                    SEQ
+                                      IF
+                                        r>u1
+                                          u1 := r
+                                        TRUE
+                                          SKIP
+                                  TRUE
+                                    SEQ
+                                      IF
+                                        r<u2
+                                          u2 := r
+                                        TRUE
+                                          SKIP
+                            --}}}
+                            IF
+                              u1 > u2     -- Streiche ganz unsichtbare Linie
+                                SKIP
+                              TRUE
+                                SEQ
+                                  IF
+                                    u1>0.0(REAL32)
+                                      --{{{  Startpunkt ermitteln
+                                      SEQ
+                                        CASE s1
+                                          8
+                                            SEQ
+                                              xst := x1 + (INT ROUND (u1 *(REAL32 ROUND p[1])))
+                                              yst := CLIPMINY
+                                          4
+                                            SEQ
+                                              xst := x1 + (INT ROUND (u1 *(REAL32 ROUND p[1])))
+                                              yst := CLIPMAXY
+                                          1
+                                            SEQ
+                                              xst := CLIPMINX
+                                              yst := y1 + (INT ROUND (u1 *(REAL32 ROUND p[3])))
+                                          2
+                                            SEQ
+                                              xst := CLIPMAXX
+                                              yst := y1 + (INT ROUND (u1 *(REAL32 ROUND p[3])))
+                                          ELSE
+                                            SEQ
+                                              xst := x1 + (INT ROUND (u1 *(REAL32 ROUND p[1])))
+                                              yst := y1 + (INT ROUND (u1 *(REAL32 ROUND p[3])))
+                                      --}}}
+                                    TRUE
+                                      SEQ
+                                        xst := x1
+                                        yst := y1
+                                  IF
+                                    u2<1.0(REAL32)
+                                      --{{{  Endpunkt ermitteln
+                                      SEQ
+                                        CASE s3
+                                          8
+                                            SEQ
+                                              xen := x1 + (INT ROUND (u2 *(REAL32 ROUND p[1])))
+                                              yen := CLIPMINY
+                                          4
+                                            SEQ
+                                              xen := x1 + (INT ROUND (u2 *(REAL32 ROUND p[1])))
+                                              yen := CLIPMAXY
+                                          1
+                                            SEQ
+                                              xen := CLIPMINX
+                                              yen := y1 + (INT ROUND (u2 *(REAL32 ROUND p[3])))
+                                          2
+                                            SEQ
+                                              xen := CLIPMAXX
+                                              yen := y1 + (INT ROUND (u2 *(REAL32 ROUND p[3])))
+                                      
+                                          ELSE
+                                            SEQ
+                                              xen := x1 + (INT ROUND (u2 *(REAL32 ROUND p[1])))
+                                              yen := y1 + (INT ROUND (u2 *(REAL32 ROUND p[3])))
+                                      --}}}
+                                    TRUE
+                                      SEQ
+                                        xen := x3
+                                        yen := y3
+                                  linep(xst,yst,xen,yen,c)
+                          --}}}
+                --}}}
+              TRUE             -- sonst : Linie sicher unsichtbar
+                SKIP
+  :
+  --}}}
+
+  --{{{  point
+  
+  PROC point(CHAN OF POINTP vom.user)
+    INT x,y,c:
+    SEQ
+      vom.user ? x;y;c
+      IF
+        (x>=0) AND (x<MAXX) AND (y>=0) AND (y<MAXY)
+          SEQ
+            screen[(S+XOFFSET)+((XSTRIDE TIMES y)+x)] := BYTE (c/\#000000FF)
+  :
+  --}}}
+  --{{{  gpoint
+  
+  PROC gpoint(CHAN OF GPOINTP vom.user,CHAN OF GPOINTANTWP zum.user)
+    INT x,y:
+    SEQ
+      vom.user ? x;y
+      zum.user ! INT screen[(S+XOFFSET)+((XSTRIDE TIMES y)+x)]
+  :
+  --}}}
+  --{{{  linenc no cliping only solid line
+  
+  PROC linenc(CHAN OF LINEP vom.user)
+  
+    INT x1,y1,x3,y3,c :
+    INT dx,dy,x2,y2,e,xs,ys :
+  
+    SEQ
+      vom.user ? x1;y1;x3;y3;c
+  
+      --y1 := S + y11
+      --y3 := S + y33
+  
+      dx := x3 - x1
+      dy := y3 - y1
+      x2 := x1
+      y2 := y1
+      IF
+        dx < 0
+          SEQ
+            dx := -dx
+            xs := -1
+        TRUE
+          SEQ
+            xs := 1
+      IF
+        dy < 0
+          SEQ
+            dy := -dy
+            ys := -1
+        TRUE
+          SEQ
+            ys := 1
+      IF
+        dy = 0
+          e := -1
+        TRUE
+          e := 0
+  
+      SEQ
+        WHILE (x2 <> x3) OR (y2 <> y3)
+          SEQ
+            screen[(S+XOFFSET)+((y2 TIMES XSTRIDE)+x2)] := BYTE c
+            IF
+              e >= 0
+                SEQ
+                  y2 := y2 + ys
+                  e  := e  - dx
+              TRUE
+                SEQ
+                  x2 := x2 + xs
+                  e  := e  + dy
+        screen[(S+XOFFSET)+((y2 TIMES XSTRIDE)+x2)] := BYTE c
+  
+  :
+  --}}}
+  --{{{  hline no cliping only solid line
+  
+  PROC hline(CHAN OF HLINEP vom.user)
+  
+    INT s,e,y,c :
+    SEQ
+      vom.user ? s;e;y;c
+      SEQ i= (XSTRIDE TIMES y)+s FOR (e+1)-s
+        SEQ
+          screen[(S+XOFFSET)+i] := BYTE c
+  :
+  --}}}
+  --{{{  pline (with cliping and pattern)
+  PROC pline (CHAN OF ANY vom.user)
+    INT anz,c,x1,y1,x2,y2 :
+    CHAN OF LINEP zum.line :
+    SEQ
+      vom.user ? anz;c;x1;y1
+      SEQ i=0 FOR anz-1
+        PAR
+          line(zum.line)
+          SEQ
+            vom.user ? x2;y2
+            zum.line ! x1;y1;x2;y2;c
+            x1:=x2
+            y1:=y2
+  :
+  --}}}
+
+  --{{{  save
+  
+  PROC save()
+    SEQ
+      []INT64 screen64 RETYPES screen :
+      SEQ i=0 FOR ((MAXX*MAXY)>>3)
+        SEQ
+          save64[i] := screen64[i]
+  
+  :
+  --}}}
+  --{{{  restore
+  
+  PROC restore()
+    SEQ
+      []INT64 screen64 RETYPES screen :
+      SEQ i=0 FOR ((MAXX*MAXY)>>3)
+        SEQ
+          screen64[i] := save64[i]
+  
+  :
+  --}}}
+  --{{{  cls
+  
+  PROC cls()
+    SEQ
+      --[]INT64 screen64 RETYPES screen :
+      --SEQ i=0 FOR ((MAXX*MAXY)/8)
+      --  SEQ
+      --    screen64[S64+i] := 0(INT64)
+  
+      SEQ y=0 FOR MAXY
+        []INT64 screen64 RETYPES [screen FROM (S+XOFFSET)+(y TIMES XSTRIDE) FOR MAXX] :
+        SEQ x=0 FOR (MAXX >> 3)
+          SEQ
+            screen64[x]:= 0(INT64)
+  :
+  --}}}
+  --{{{  inv
+  
+  PROC inv()
+    SEQ
+      --[]INT64 screen64 RETYPES screen :
+      --SEQ i=0 FOR ((MAXX*MAXY)/8)
+      --  SEQ
+      --    screen64[S64+i] := ~(screen64[S64+i])
+      SEQ y=0 FOR MAXY
+        []INT64 screen64 RETYPES [screen FROM (S+XOFFSET)+(y TIMES XSTRIDE) FOR MAXX] :
+        SEQ x=0 FOR (MAXX >> 3)
+          SEQ
+            screen64[x]:= ~screen64[x]
+  :
+  --}}}
+  --{{{  paldac (dummy in ATW800/2)
+  
+  PROC paldac(CHAN OF PALDACP vom.user)
+    INT pal,dac :
+    SEQ
+      -- Only Dummy for ATW800/2
+      vom.user ? pal;dac
+      palregs[pal]:=dac
+  :
+  --}}}
+  --{{{  box
+  PROC box(CHAN OF BOXP vom.user)
+    INT x1,y1,x2,y2,c :
+    --INT linmask :
+  
+    SEQ
+      vom.user ? x1;y1;x2;y2;c
+      --linmask:=LINMASK
+      SEQ y=y1 FOR ((y2-y1)+1)
+        SEQ
+          --IF
+          --  (y<CLIPMINY) OR (y>CLIPMAXY)
+          --    SKIP
+          --  TRUE
+          --    SEQ
+          --      LINMASK := MUSTERMASK[y /\ 31]
+          --      hlinep(x1,x2,y,c)
+          SEQ i= (XSTRIDE TIMES y)+(x1+(S+XOFFSET)) FOR (x2+1)-x1
+            SEQ
+              screen[i] := BYTE c
+  
+      --LINMASK:=linmask
+  :
+  --}}}
+
+  --{{{  Server Loop
+
+  VAL [3]BYTE home IS [27(BYTE),'H',0(BYTE)] :
+
+  PROC VGA.SERVER.START(CHAN OF SP fs,ts, CHAN OF ANY Aus, Ein)
+    PROC VGASERVER(CHAN OF ANY Ein, Aus)
+      --
+      -- Hauptprogramm Graphikserver
+      --
+      [PUFGROS]INT puffer :
+      INT befehl :
+
+      INT head,tail:
+      INT element:
+      BOOL frei:
+      CHAN OF ANY stream :
+
+      SEQ
+
+        --so.write.string(fs,ts,home)
+        so.write.string.nl(fs,ts,"VGASERVER started")
+
+        head:=0
+        tail:=0
+        frei := TRUE
+        befehl:=0
+
+        PRI PAR
+          --
+          -- zwei Parallele Endlosschleifen
+          --
+          WHILE TRUE
+            SEQ
+              --
+              -- 1. Versorge Puffer
+              --
+              PRI ALT
+
+                frei & Ein ? element
+                  SEQ
+                    puffer[head]:= element
+                    head := (head + 1) REM PUFGROS
+                    IF
+                      head = tail
+                        frei := FALSE
+                      TRUE
+                        SKIP
+
+                ((NOT frei) OR (tail <> head)) & SKIP
+                  SEQ
+                    stream ! puffer[tail]
+                    tail := (tail + 1) REM PUFGROS
+                    frei := TRUE
+          SEQ
+            WHILE befehl <> EXIT
+              SEQ
+                --
+                --  2. Interpretiere Befehl
+                --
+                SEQ
+                  stream ? befehl
+                  CASE befehl
+                    NOP
+                      IF
+                        VGADEBUG
+                          so.write.string.nl(fs,ts,"*C*NNOP")
+                        TRUE
+                          SKIP
+                    INIT
+                      init(stream,Aus)
+                    TSTART
+                      tstart()
+                    TSTOP
+                      tstop(Aus)
+                    RAWTEXT
+                      rawtext(fs,ts,stream)
+                    GETKEY
+                      BYTE key,result:
+                      SEQ
+                        so.getkey(fs,ts,key,result)
+                        Aus ! key
+                    CLS
+                      cls()
+                    INV
+                      inv()
+                    SAVE
+                      save()
+                    RESTORE
+                      restore()
+                    SETCLIPWIN
+                      setclipwin(stream)
+                    POINT
+                      point(stream)
+                    PLINE
+                      pline(stream)
+                    LINE
+                      line(stream)
+                    LINENC
+                      linenc(stream)
+                    HLINE
+                      hline(stream)
+                    PALDAC
+                      paldac(stream)
+                    GETPOINT
+                      gpoint(stream,Aus)
+                    BOX
+                      box(stream)
+                    PHYSPAGE
+                      INT page :
+                      SEQ
+                        stream ? page
+                        IF
+                          (page <> 0) AND (MAXSCREEN > 0)
+                            SEQ
+                              vtgregs[13] := #00000010
+                              vtgregs[12] := #00000000
+                          TRUE
+                            SEQ
+                              vtgregs[13] := #00000000
+                              vtgregs[12] := #00000000
+                    LOGPAGE
+                      INT page :
+                      SEQ
+                        stream ? page
+                        IF
+                          (page <> 0) AND(MAXSCREEN > 0)
+                            SEQ
+                              S   := #00100000
+                              S64 := S >> 3
+                          TRUE
+                            SEQ
+                              S   := #00000000
+                              S64 := #00000000
+
+                    SETVTGREG
+                      INT index,val:
+                      SEQ
+                        stream ? index;val
+                        vtgregs[index]:= val
+                    GETVTGREG
+                      INT index :
+                      SEQ
+                        stream ? index
+                        Aus ! (VTGBASE+(index TIMES 4));vtgregs[index]
+                    GETVERREG
+                      INT index :
+                      SEQ
+                        stream ? index
+                        Aus ! (VERBASE+(index TIMES 4));verregs[index]
+                    GETPALREG
+                      INT index :
+                      SEQ
+                        stream ? index
+                        Aus ! (PALBASE+(index TIMES 4));palregs[index]
+                    GETBLTREG
+                      INT index :
+                      SEQ
+                        stream ? index
+                        Aus ! (BLTBASE+(index TIMES 4));bltregs[index]
+                    SEITENEU
+                      INT irq :
+                      SEQ
+                        vbl ? irq
+                        Aus ! irq
+                    ELSE
+                      SKIP
+
+            --vtgregs[14] := #00000000
+            so.write.string.nl(fs,ts,"VGASERVER stopped")
+            so.exit(fs,ts,sps.success)
+
+    :
+    SEQ
+      VGASERVER(Ein,Aus)
+  :
+  --}}}
+
+  --
+  -- Start the Server Loop
+  --
+
+  SEQ
+    VGA.SERVER.START(fs,ts,in,out)
+:

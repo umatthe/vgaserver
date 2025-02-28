@@ -7,14 +7,18 @@ VAL VGADEBUG IS FALSE:
 --{{{  ATW800/2 Settings
 
 --
+--
+--
+VAL ATWVRAM IS (2048*1024):
+--
 -- ATW800/2 fix 1024x768x8
 --
-VAL MAXX        IS 1024:
-VAL MAXY        IS 768:
-VAL COLMASK     IS 255:
-VAL XSTRIDE     IS MAXX:
-VAL XOFFSET     IS 0:
-VAL MAXSCREEN   IS 1:
+VAL FIXMAXX        IS 1024:
+VAL FIXMAXY        IS 768:
+VAL FIXCOLMASK     IS 255:
+VAL FIXXSTRIDE     IS 1024:
+VAL FIXXOFFSET     IS 0:
+VAL FIXMAXSCREEN   IS 1:
 --
 -- ATW800/2 fix 1280x800x8
 --
@@ -38,11 +42,12 @@ VAL MAXSCREEN   IS 1:
 VAL VGAMOD      IS 1:
 --
 VAL SCREENBASE  IS (#00600000 >> 2) :
+VAL ATWINFOBASE IS (#007FDC00 >> 2) :
 VAL PALBASE     IS (#C0000000 >> 2) :
 VAL VERBASE     IS (#C0000400 >> 2) :
---VAL VTGBASE1    IS (#C0001000 >> 2) :
 VAL VTGBASE     IS (#C0001000 >> 2) :
 VAL BLTBASE     IS (#C0001040 >> 2) :
+
 --
 -- VGA Server Buffersize
 --
@@ -55,6 +60,13 @@ VAL PUFGROS IS 10000:
 PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
 
   --{{{  Globale Variablen (Server - Einstellungen)
+  INT MAXX      :
+  INT MAXY      :
+  INT COLMASK   :
+  INT XSTRIDE   :
+  INT XOFFSET   :
+  INT MAXSCREEN :
+  
   BOOL RAND :                                 -- Umrandung bei Polyfill
   BOOL SCHATTENFLAG :                         -- Zeichnen im Schatten oder Bild
   INT BREIT :                                 -- Byte pro Zeile
@@ -66,8 +78,16 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
   INT HINTERGRUND,MAUSFARBE :                 -- Farben von Hintergrund u. Maus
   INT SPRITEMODUS :
   [32]INT MUSTERMASK :                        -- eingestelltes Fuellmuster
-  [(MAXX*MAXY)>>3]INT64 save64 :
+  [ATWVRAM>>3]INT64 save64 :                  -- max 2MB to save on ATV800/2
   INT PLINESTART,PLINEENDE :                  -- Polylineattribute
+  
+  INT ATWMAGIC :
+  INT VDIMEMSTART :
+  INT VDIMEMSIZE :
+  INT16 VDIVSTRIDE :
+  INT16 VDIBPP :
+  INT16 VDIWIDTH :
+  INT16 VDIHEIGHT :
   --}}}
   --{{{  Debug-Tools
   PROC dbgint(CHAN OF SP fs,ts, VAL []BYTE t,VAL INT v)
@@ -78,7 +98,45 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
       INTTOSTRING(lplen,lp,v)
       so.write.string.nl(fs,ts,[lp FROM 0 FOR lplen])
   :
+  PROC dbghex(CHAN OF SP fs,ts, VAL []BYTE t,VAL INT v)
+    [20]BYTE lp :
+    INT lplen :
+    SEQ
+      so.write.string(fs,ts,t)
+      HEXTOSTRING(lplen,lp,v)
+      so.write.string.nl(fs,ts,[lp FROM 0 FOR lplen])
+  :
   --}}}
+  --{{{  Endian Converter Tools
+  INT FUNCTION swap (VAL INT x)
+    INT in,out:
+  
+    VALOF
+      SEQ
+        in:=x
+        []BYTE i RETYPES in :
+        []BYTE o RETYPES out:
+        SEQ
+  
+          o[0],o[1],o[2],o[3]:=i[3],i[2],i[1],i[0]
+      RESULT out
+  :
+  
+  INT16 FUNCTION swap16 (VAL INT16 x)
+    INT16 in,out:
+  
+    VALOF
+      SEQ
+        in:=x
+        []BYTE i RETYPES in :
+        []BYTE o RETYPES out:
+        SEQ
+  
+          o[0],o[1]:=i[1],i[0]
+      RESULT out
+  :
+  --}}}
+
   --
   --
   --
@@ -100,11 +158,14 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
   [16]INT  verregs :
   [256]INT palregs :
   [16]INT  bltregs :
+  [128]INT atwinfo :
+  
   PLACE palregs AT PALBASE :
   PLACE verregs AT VERBASE :
   PLACE vtgregs AT VTGBASE :
   --PLACE vtgregs1 AT VTGBASE1 :
   PLACE bltregs AT BLTBASE :
+  PLACE atwinfo AT ATWINFOBASE :
   --}}}
   --{{{  Hilfs - Programme
   --
@@ -639,6 +700,39 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
     INT modus,freq :
     SEQ
       vom.user ? modus;freq
+  
+      MAXX      := FIXMAXX
+      MAXY      := FIXMAXY
+      COLMASK   := FIXCOLMASK
+      XSTRIDE   := FIXXSTRIDE
+      XOFFSET   := FIXXOFFSET
+      MAXSCREEN := FIXMAXSCREEN
+      IF
+        ATWMAGIC = #41545738 --ATW8
+          SEQ
+            MAXX      := INT (VDIWIDTH)
+            MAXY      := INT (VDIHEIGHT)
+            COLMASK   := (1 << (INT(VDIBPP)))-1
+            IF
+              VDIVSTRIDE = VDIWIDTH
+                SEQ
+                  XSTRIDE   := INT (VDIVSTRIDE)
+                  XOFFSET   := 0
+              TRUE
+                SEQ
+                  MAXX      := INT (VDIVSTRIDE-VDIWIDTH)
+                  XSTRIDE   := INT (VDIVSTRIDE)
+                  XOFFSET   := INT (VDIWIDTH)
+  
+            IF
+              VDIMEMSIZE > (ATWVRAM>>1)
+                MAXSCREEN := 0
+              TRUE
+                MAXSCREEN := 1
+  
+            COLMASK   := #FF -- to be changed when ATW800/2
+                             -- supports 1/4/16/24/32 modi
+  
       zum.user ! MAXX;MAXY;COLMASK+1;MAXSCREEN+1
       CLIPMINX,CLIPMINY,CLIPMAXX,CLIPMAXY := 0,0,(MAXX-1),(MAXY-1)
       LINMASK,LINMODE,LINBREIT :=#FFFFFFFF,DECKEND,1
@@ -1126,10 +1220,32 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
       BOOL frei:
       CHAN OF ANY stream :
 
+
       SEQ
+        ATWMAGIC    :=swap(atwinfo[0])
+        VDIMEMSTART :=swap(atwinfo[4])
+        VDIMEMSIZE  :=swap(atwinfo[5])
+
+        []INT16 atwinfo16 RETYPES [atwinfo FROM 6 FOR 10] :
+        SEQ
+          VDIVSTRIDE  :=swap16(atwinfo16[0])
+          VDIBPP      :=swap16(atwinfo16[1])
+          VDIWIDTH    :=swap16(atwinfo16[2])
+          VDIHEIGHT   :=swap16(atwinfo16[3])
 
         --so.write.string(fs,ts,home)
         so.write.string.nl(fs,ts,"VGASERVER started")
+        --SEQ I=0 FOR  16
+        --  SEQ
+        --    dbghex(fs,ts,"Header ",(atwinfo[I]))
+
+        dbghex(fs,ts,"ATWMAGIC "   ,(ATWMAGIC))
+        dbghex(fs,ts,"VDIMEMSTART ",(VDIMEMSTART))
+        dbghex(fs,ts,"VDIMEMSIZE " ,(VDIMEMSIZE))
+        dbghex(fs,ts,"VDIVSTRIDE " ,INT(VDIVSTRIDE))
+        dbghex(fs,ts,"VDIBPP "     ,INT(VDIBPP))
+        dbghex(fs,ts,"VDIWIDTH "   ,INT(VDIWIDTH))
+        dbghex(fs,ts,"VDIHEIGHT "  ,INT(VDIHEIGHT))
 
         head:=0
         tail:=0

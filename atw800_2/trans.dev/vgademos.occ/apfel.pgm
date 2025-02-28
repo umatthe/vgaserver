@@ -6,7 +6,7 @@ NODE atw,slot1 :
 ARC hostarc :
 NETWORK
   DO
-    SET atw(type,memsize := "T425", 2048 * 1024)
+    SET atw(type,memsize := "T425", 4096 * 1024)
     SET slot1(type,memsize := "T800", 2048 * 1024)
     CONNECT atw[link][0] TO HOST WITH hostarc
     CONNECT atw[link][1] TO slot1[link][3]

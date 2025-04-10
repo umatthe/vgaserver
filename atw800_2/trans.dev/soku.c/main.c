@@ -12,7 +12,7 @@
 //
 //               Copyright (c) 2006 M. Bruestle, Vienna (AT)
 //
-//  Andre Saischowa AWT800-Port / 2024
+//  Andre Saischowa ATW800-Port / 2024
 //
 //////////////////////////////////////////////////////////////////////////////
 */
@@ -40,45 +40,45 @@
 
        #ifdef ATARI_1024
 
-          #define AS_AWT_SCREEN_VRAM  (0x80600000 + 384)
-          #define AS_AWT_SCREEN_STRIDE      1024
+          #define AS_ATW_SCREEN_VRAM  (0x80600000 + 384)
+          #define AS_ATW_SCREEN_STRIDE      1024
 
-          #define AS_AWT_SCREEN_WIDTH       640
-          #define AS_AWT_SCREEN_HEIGHT      480
-          #define AS_AWT_SCREEN_COLORDEPTH   8
+          #define AS_ATW_SCREEN_WIDTH       640
+          #define AS_ATW_SCREEN_HEIGHT      480
+          #define AS_ATW_SCREEN_COLORDEPTH   8
 
        #elif ATARI_1440
-          #define AS_AWT_SCREEN_VRAM  (0x80600000 +640)
-          #define AS_AWT_SCREEN_STRIDE      1440
+          #define AS_ATW_SCREEN_VRAM  (0x80600000 +640)
+          #define AS_ATW_SCREEN_STRIDE      1440
 
-          #define AS_AWT_SCREEN_WIDTH       800
-          #define AS_AWT_SCREEN_HEIGHT      800
-          #define AS_AWT_SCREEN_COLORDEPTH   8
+          #define AS_ATW_SCREEN_WIDTH       800
+          #define AS_ATW_SCREEN_HEIGHT      800
+          #define AS_ATW_SCREEN_COLORDEPTH   8
 
        #else /* Spittscreen 1280x800 (640x800 + 640x800) */
-          #define AS_AWT_SCREEN_VRAM  (0x80600000 +640)
-          #define AS_AWT_SCREEN_STRIDE      1280
+          #define AS_ATW_SCREEN_VRAM  (0x80600000 +640)
+          #define AS_ATW_SCREEN_STRIDE      1280
 
-          #define AS_AWT_SCREEN_WIDTH       640
-          #define AS_AWT_SCREEN_HEIGHT      800
-          #define AS_AWT_SCREEN_COLORDEPTH   8
+          #define AS_ATW_SCREEN_WIDTH       640
+          #define AS_ATW_SCREEN_HEIGHT      800
+          #define AS_ATW_SCREEN_COLORDEPTH   8
 
     #endif
 
     #else
         /* Standalone - Version , VTG is setting, not for ATW800/2 !!!*/
-        #define AS_AWT_SCREEN_VRAM  0x80600000
-        #define AS_AWT_SCREEN_STRIDE      800
+        #define AS_ATW_SCREEN_VRAM  0x80600000
+        #define AS_ATW_SCREEN_STRIDE      800
 
-        #define AS_AWT_SCREEN_WIDTH       800
-        #define AS_AWT_SCREEN_HEIGHT      600
-        #define AS_AWT_SCREEN_COLORDEPTH   8
+        #define AS_ATW_SCREEN_WIDTH       800
+        #define AS_ATW_SCREEN_HEIGHT      600
+        #define AS_ATW_SCREEN_COLORDEPTH   8
 
-        #define AWT_INIT_VTG 1
+        #define ATW_INIT_VTG 1
 
     #endif
 
-    #define AWT_GFX_IMPLEMENTATION
+    #define ATW_GFX_IMPLEMENTATION
     #include "..\dev-deps\atw_gfx.h"
 
 

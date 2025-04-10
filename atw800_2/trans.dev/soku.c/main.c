@@ -79,7 +79,7 @@
     #endif
 
     #define AWT_GFX_IMPLEMENTATION
-    #include "..\dev-deps\awt_gfx.h"
+    #include "..\dev-deps\atw_gfx.h"
 
 
 #else

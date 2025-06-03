@@ -1,7 +1,9 @@
 Rechner      CPU             Frequenz     Compiler Option  Zeit 
 ----------------------------------------------------------------
 MacbookPro (M4)               4.4GHz       gcc      O3    0.6sek
+Win11 WSL    Core  i5-1345U   1.6 +Turbo   gcc      O3    0.8sek
 i7-4770 Ruetlich 2018         3.4GHz       gcc      O3    1.2sek
+Win10 WSL    Core i5-8365U    1.9 + Turbo  gcc      O3    1.3sek
 Win7 Vm Suse Core i7-4700MQ   2.4 +Turbo?  gcc      O3    1.3sek
 Win10 Core i7                 2.9GHz       gcc      O3    1.7sek
 RaspberryPi5 ARM-A76          2.4GHz       gcc      O3      2sek

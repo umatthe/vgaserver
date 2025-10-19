@@ -47,7 +47,7 @@ VAL PALBASE     IS (#C0000000 >> 2) :
 VAL VERBASE     IS (#C0000400 >> 2) :
 VAL VTGBASE     IS (#C0001000 >> 2) :
 VAL BLTBASE     IS (#C0001040 >> 2) :
-
+VAL CTRLBASE    IS (#C0002300 >> 2) :
 --
 -- VGA Server Buffersize
 --
@@ -159,6 +159,7 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
   [256]INT palregs :
   [16]INT  bltregs :
   [128]INT atwinfo :
+  INT      intcontrol :
   
   PLACE palregs AT PALBASE :
   PLACE verregs AT VERBASE :
@@ -166,6 +167,7 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
   --PLACE vtgregs1 AT VTGBASE1 :
   PLACE bltregs AT BLTBASE :
   PLACE atwinfo AT ATWINFOBASE :
+  PLACE intcontrol AT CTRLBASE :
   --}}}
   --{{{  Hilfs - Programme
   --
@@ -707,6 +709,9 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
       XSTRIDE   := FIXXSTRIDE
       XOFFSET   := FIXXOFFSET
       MAXSCREEN := FIXMAXSCREEN
+
+      intcontrol := #00000003 -- Enable VBL
+
       IF
         ATWMAGIC = #41545738 --ATW8
           SEQ
@@ -765,15 +770,15 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
     SEQ
       vom.user ? c
       len:=0
-      WHILE c <> 0
+      WHILE (c <> 0) AND (len < 20)
         SEQ
           buffer[len]:=c
-          len:=len+1
+          len := len +1
           vom.user ? c
       IF
         VGADEBUG
           SEQ
-            dbgint(fs,ts,"String len: ",(len*4))
+            dbgint(fs,ts,"String len: ",(len-1))
         TRUE
           SKIP
       []BYTE b8 RETYPES buffer :

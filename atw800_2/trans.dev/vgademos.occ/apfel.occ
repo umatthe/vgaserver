@@ -249,7 +249,6 @@ PROC APFEL.MAENNCHEN(CHAN OF ANY Aus,Ein)
     APFELLOOP(Ein,Aus)
     Aus ! TSTOP
     Ein ? fdur
-    Aus ! RAWTEXT
     sendstring(Aus, "Duration APFELLOOP: *#00")
     REAL32TOSTRING(len,buffer,fdur,0,0)
     buffer[len]:=#00(BYTE)

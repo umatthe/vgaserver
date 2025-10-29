@@ -82,6 +82,8 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
   INT PLINESTART,PLINEENDE :                  -- Polylineattribute
   
   INT ATWMAGIC :
+  INT ATWVERSION :
+  INT FPGAVERSION :
   INT VDIMEMSTART :
   INT VDIMEMSIZE :
   INT16 VDIVSTRIDE :
@@ -710,7 +712,9 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
       XOFFSET   := FIXXOFFSET
       MAXSCREEN := FIXMAXSCREEN
 
-      intcontrol := #00000003 -- Enable VBL
+      IF
+        FPGAVERSION > #30313939 -- Version 1 has no Config-Register
+          intcontrol := #00000003 -- Enable VBL
 
       IF
         ATWMAGIC = #41545738 --ATW8
@@ -1228,6 +1232,8 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
 
       SEQ
         ATWMAGIC    :=swap(atwinfo[0])
+        ATWVERSION  :=swap(atwinfo[2])
+        FPGAVERSION :=swap(atwinfo[3])
         VDIMEMSTART :=swap(atwinfo[4])
         VDIMEMSIZE  :=swap(atwinfo[5])
 
@@ -1245,6 +1251,8 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
         --    dbghex(fs,ts,"Header ",(atwinfo[I]))
 
         dbghex(fs,ts,"ATWMAGIC "   ,(ATWMAGIC))
+        dbghex(fs,ts,"ATWVERSION " ,(ATWVERSION))
+        dbghex(fs,ts,"FPGAVERSION ",(FPGAVERSION))
         dbghex(fs,ts,"VDIMEMSTART ",(VDIMEMSTART))
         dbghex(fs,ts,"VDIMEMSIZE " ,(VDIMEMSIZE))
         dbghex(fs,ts,"VDIVSTRIDE " ,INT(VDIVSTRIDE))
@@ -1398,6 +1406,10 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
                       SKIP
 
             --vtgregs[14] := #00000000
+            IF
+              FPGAVERSION > #30313939 -- Version 1 has no Config-Register
+                intcontrol := #00000000 -- Disable VBL
+
             so.write.string.nl(fs,ts,"VGASERVER stopped")
             so.exit(fs,ts,sps.success)
 

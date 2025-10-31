@@ -715,7 +715,8 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
       IF
         FPGAVERSION > #30313939 -- Version 1 has no Config-Register
           intcontrol := #00000003 -- Enable VBL
-
+        TRUE
+          SKIP
       IF
         ATWMAGIC = #41545738 --ATW8
           SEQ
@@ -1252,7 +1253,11 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
 
         dbghex(fs,ts,"ATWMAGIC "   ,(ATWMAGIC))
         dbghex(fs,ts,"ATWVERSION " ,(ATWVERSION))
-        dbghex(fs,ts,"FPGAVERSION ",(FPGAVERSION))
+        IF
+          FPGAVERSION > #30313939
+            dbghex(fs,ts,"FPGAVERSION : 2 : ",FPGAVERSION)
+          TRUE
+            dbghex(fs,ts,"FPGAVERSION : 1 : ",FPGAVERSION)
         dbghex(fs,ts,"VDIMEMSTART ",(VDIMEMSTART))
         dbghex(fs,ts,"VDIMEMSIZE " ,(VDIMEMSIZE))
         dbghex(fs,ts,"VDIVSTRIDE " ,INT(VDIVSTRIDE))
@@ -1409,7 +1414,8 @@ PROC VGA(CHAN OF SP fs,ts, CHAN OF ANY in, out)
             IF
               FPGAVERSION > #30313939 -- Version 1 has no Config-Register
                 intcontrol := #00000000 -- Disable VBL
-
+              TRUE
+                SKIP
             so.write.string.nl(fs,ts,"VGASERVER stopped")
             so.exit(fs,ts,sps.success)
 
